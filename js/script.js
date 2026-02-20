@@ -13,6 +13,7 @@ class POSSystem {
         this.cargarProductos();
         this.actualizarCarrito();
         this.initResponsive();
+        this.agregarRippleEffect();
         
         setTimeout(() => {
             document.getElementById('codigoBarras').focus();
@@ -84,16 +85,56 @@ class POSSystem {
             });
         });
         
+        // Manejo de métodos de pago
+        document.querySelectorAll('.metodo-pago-btn').forEach(btn => {
+            // Remover event listeners anteriores
+            btn.replaceWith(btn.cloneNode(true));
+        });
+        
+        // Volver a seleccionar los botones después del reemplazo
         document.querySelectorAll('.metodo-pago-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.metodo-pago-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                this.metodoPagoActivo = e.target.dataset.metodo;
+                e.preventDefault();
+                e.stopPropagation();
                 
+                const metodo = e.currentTarget.dataset.metodo;
+                
+                // Remover clase active de todos
+                document.querySelectorAll('.metodo-pago-btn').forEach(b => {
+                    b.classList.remove('active');
+                });
+                
+                // Agregar clase active al seleccionado
+                e.currentTarget.classList.add('active');
+                
+                // Actualizar método de pago
+                this.metodoPagoActivo = metodo;
+                
+                // Mostrar/ocultar sección de efectivo
                 const efectivoSection = document.getElementById('efectivoSection');
                 if (efectivoSection) {
-                    efectivoSection.style.display = this.metodoPagoActivo === 'Efectivo' ? 'block' : 'none';
+                    if (metodo === 'Efectivo') {
+                        efectivoSection.style.display = 'block';
+                        // Limpiar el campo de efectivo
+                        const efectivoInput = document.getElementById('efectivoRecibido');
+                        if (efectivoInput) {
+                            efectivoInput.value = '';
+                        }
+                        // Actualizar cambio
+                        this.calcularCambio();
+                    } else {
+                        efectivoSection.style.display = 'none';
+                    }
                 }
+                
+                // Forzar actualización del botón procesar
+                const btnProcesar = document.getElementById('btnProcesar');
+                if (btnProcesar) {
+                    btnProcesar.disabled = this.carrito.length === 0;
+                }
+                
+                // Feedback visual
+                this.mostrarNotificacion(`Método de pago: ${metodo}`, 'success');
             });
         });
         
@@ -101,6 +142,11 @@ class POSSystem {
         if (efectivoInput) {
             efectivoInput.addEventListener('input', () => {
                 this.calcularCambio();
+            });
+            
+            // Validar al perder el foco
+            efectivoInput.addEventListener('blur', () => {
+                this.validarEfectivo();
             });
         }
         
@@ -120,6 +166,39 @@ class POSSystem {
                     carritoPanel.classList.remove('visible');
                 }
             }
+        });
+    }
+    
+    agregarRippleEffect() {
+        document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
+            button.addEventListener('click', function(e) {
+                // Solo aplicar ripple, sin efectos de escala
+                const ripple = document.createElement('span');
+                ripple.classList.add('ripple');
+                
+                const rect = button.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                const x = e.clientX - rect.left - size / 2;
+                const y = e.clientY - rect.top - size / 2;
+                
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = x + 'px';
+                ripple.style.top = y + 'px';
+                
+                // Remover ripples anteriores
+                const existingRipple = button.querySelector('.ripple');
+                if (existingRipple) {
+                    existingRipple.remove();
+                }
+                
+                button.appendChild(ripple);
+                
+                setTimeout(() => {
+                    if (ripple && ripple.parentNode) {
+                        ripple.remove();
+                    }
+                }, 600);
+            });
         });
     }
     
@@ -302,19 +381,62 @@ class POSSystem {
     }
     
     calcularCambio() {
-        const efectivo = parseFloat(document.getElementById('efectivoRecibido')?.value) || 0;
+        const efectivoInput = document.getElementById('efectivoRecibido');
+        if (!efectivoInput) return;
+        
+        // Si el campo está vacío, no mostrar cambio
+        if (!efectivoInput.value || efectivoInput.value === '') {
+            const cambioEl = document.getElementById('cambio');
+            if (cambioEl) {
+                cambioEl.textContent = '$0.00';
+                cambioEl.style.color = 'var(--gray)';
+            }
+            return;
+        }
+        
+        const efectivo = parseFloat(efectivoInput.value) || 0;
         const total = parseFloat(document.getElementById('total')?.textContent.replace('$', '')) || 0;
         const cambio = efectivo - total;
         
         const cambioEl = document.getElementById('cambio');
         if (cambioEl) {
-            if (cambio >= 0) {
+            if (cambio >= 0 && efectivo > 0) {
                 cambioEl.textContent = `$${cambio.toFixed(2)}`;
                 cambioEl.style.color = 'var(--success)';
-            } else {
+            } else if (efectivo > 0) {
                 cambioEl.textContent = `$${cambio.toFixed(2)}`;
                 cambioEl.style.color = 'var(--danger)';
+            } else {
+                cambioEl.textContent = '$0.00';
+                cambioEl.style.color = 'var(--gray)';
             }
+        }
+    }
+    
+    validarEfectivo() {
+        const efectivoInput = document.getElementById('efectivoRecibido');
+        if (!efectivoInput) return;
+        
+        const efectivo = parseFloat(efectivoInput.value);
+        const total = parseFloat(document.getElementById('total')?.textContent.replace('$', '')) || 0;
+        
+        // Si no hay valor o es inválido
+        if (!efectivoInput.value || efectivoInput.value === '' || isNaN(efectivo) || efectivo <= 0) {
+            document.getElementById('cambio').textContent = '$0.00';
+            document.getElementById('cambio').style.color = 'var(--gray)';
+            return;
+        }
+        
+        // Calcular cambio
+        const cambio = efectivo - total;
+        const cambioEl = document.getElementById('cambio');
+        
+        if (cambio >= 0) {
+            cambioEl.textContent = `$${cambio.toFixed(2)}`;
+            cambioEl.style.color = 'var(--success)';
+        } else {
+            cambioEl.textContent = `$${cambio.toFixed(2)}`;
+            cambioEl.style.color = 'var(--danger)';
         }
     }
     
@@ -354,18 +476,44 @@ class POSSystem {
             return;
         }
         
+        // Validación para efectivo
         if (this.metodoPagoActivo === 'Efectivo') {
-            const efectivo = parseFloat(document.getElementById('efectivoRecibido')?.value) || 0;
+            const efectivoInput = document.getElementById('efectivoRecibido');
+            const efectivo = parseFloat(efectivoInput?.value);
             const total = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
             
+            // Validar que se haya ingresado una cantidad
+            if (!efectivoInput?.value || efectivoInput.value === '') {
+                this.mostrarNotificacion('Ingrese la cantidad de efectivo recibido', 'warning');
+                efectivoInput.focus();
+                return;
+            }
+            
+            // Validar que sea un número válido
+            if (isNaN(efectivo) || efectivo <= 0) {
+                this.mostrarNotificacion('Ingrese una cantidad válida', 'warning');
+                efectivoInput.focus();
+                return;
+            }
+            
+            // Validar que el efectivo sea suficiente
             if (efectivo < total) {
                 this.mostrarNotificacion('El efectivo recibido es insuficiente', 'error');
+                efectivoInput.focus();
                 return;
             }
         }
         
         const subtotal = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
         const total = subtotal;
+        
+        let efectivoRecibido = null;
+        let cambio = null;
+        
+        if (this.metodoPagoActivo === 'Efectivo') {
+            efectivoRecibido = parseFloat(document.getElementById('efectivoRecibido')?.value);
+            cambio = efectivoRecibido - total;
+        }
         
         const venta = {
             folio: 'VENTA-' + new Date().getTime(),
@@ -374,14 +522,13 @@ class POSSystem {
             subtotal: subtotal,
             total: total,
             metodo_pago: this.metodoPagoActivo,
-            efectivo_recibido: this.metodoPagoActivo === 'Efectivo' ? 
-                parseFloat(document.getElementById('efectivoRecibido')?.value) : null,
-            cambio: this.metodoPagoActivo === 'Efectivo' ? 
-                parseFloat(document.getElementById('efectivoRecibido')?.value) - total : null
+            efectivo_recibido: efectivoRecibido,
+            cambio: cambio
         };
         
         this.mostrarTicket(venta);
         
+        // Actualizar stock
         this.carrito.forEach(item => {
             const producto = this.productos.find(p => p.id === item.id);
             if (producto) {
@@ -389,20 +536,24 @@ class POSSystem {
             }
         });
         
+        // Limpiar carrito y resetear todo
         this.carrito = [];
         this.actualizarCarrito();
         this.mostrarProductos(this.productos);
         this.mostrarNotificacion('Venta procesada exitosamente', 'success');
         
+        // Resetear todo
         this.metodoPagoActivo = null;
         document.querySelectorAll('.metodo-pago-btn').forEach(b => b.classList.remove('active'));
+        
         const efectivoSection = document.getElementById('efectivoSection');
         if (efectivoSection) {
             efectivoSection.style.display = 'none';
         }
+        
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (efectivoInput) {
-            efectivoInput.value = '0.00';
+            efectivoInput.value = ''; // Vacío en lugar de 0.00
         }
     }
     

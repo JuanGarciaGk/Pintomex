@@ -84,20 +84,20 @@
                     <span id="subtotal">$0.00</span>
                 </div>
                 
-                <!-- Sección de efectivo (oculta por defecto) -->
-                <div id="efectivoSection" style="display: none;">
-                    <div class="total-row">
-                        <span>Efectivo recibido:</span>
-                        <span>
-                            <input type="number" id="efectivoRecibido" min="0" step="0.01" value="0.00" 
-                                   style="width: 100px; padding: 0.2rem; border: 1px solid var(--light); border-radius: 4px; text-align: right;">
-                        </span>
-                    </div>
-                    <div class="total-row">
-                        <span>Cambio:</span>
-                        <span id="cambio">$0.00</span>
-                    </div>
-                </div>
+                <!-- Sección de efectivo (oculta por defecto y sin valor inicial) -->
+<div id="efectivoSection" style="display: none;">
+    <div class="total-row">
+        <span>Efectivo recibido:</span>
+        <span>
+            <input type="number" id="efectivoRecibido" min="0" step="0.01" placeholder="0.00" 
+                style="width: 100px; padding: 0.2rem; border: 1px solid var(--light); border-radius: 4px; text-align: right;">
+        </span>
+    </div>
+    <div class="total-row">
+        <span>Cambio:</span>
+        <span id="cambio">$0.00</span>
+    </div>
+</div>
                 
                 <div class="total-row grande">
                     <span>Total:</span>
