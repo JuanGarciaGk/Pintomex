@@ -72,8 +72,10 @@
                 </h2>
             </div>
             
-            <div class="carrito-items" id="carritoItems">
-                <!-- Items del carrito se cargarán dinámicamente -->
+            <div class="carrito-items-container">
+                <div class="carrito-items" id="carritoItems">
+                    <!-- Items del carrito se cargarán dinámicamente -->
+                </div>
             </div>
             
             <div class="carrito-totales">
@@ -81,53 +83,71 @@
                     <span>Subtotal:</span>
                     <span id="subtotal">$0.00</span>
                 </div>
-                <div class="total-row">
-                    <span>IVA 16%:</span>
-                    <span id="impuestos">$0.00</span>
+                
+                <!-- Sección de efectivo (oculta por defecto) -->
+                <div id="efectivoSection" style="display: none;">
+                    <div class="total-row">
+                        <span>Efectivo recibido:</span>
+                        <span>
+                            <input type="number" id="efectivoRecibido" min="0" step="0.01" value="0.00" 
+                                   style="width: 100px; padding: 0.2rem; border: 1px solid var(--light); border-radius: 4px; text-align: right;">
+                        </span>
+                    </div>
+                    <div class="total-row">
+                        <span>Cambio:</span>
+                        <span id="cambio">$0.00</span>
+                    </div>
                 </div>
+                
                 <div class="total-row grande">
                     <span>Total:</span>
                     <span id="total">$0.00</span>
                 </div>
             </div>
             
-            <div class="metodos-pago">
-                <button class="metodo-pago-btn" data-metodo="Efectivo">
-                    <i class="fas fa-money-bill"></i>
-                    Efectivo
-                </button>
-                <button class="metodo-pago-btn" data-metodo="Tarjeta">
-                    <i class="fas fa-credit-card"></i>
-                    Tarjeta
-                </button>
-                <button class="metodo-pago-btn" data-metodo="Transferencia">
-                    <i class="fas fa-university"></i>
-                    Transferencia
-                </button>
+            <div class="metodos-pago-container">
+                <div class="metodos-pago">
+                    <button class="metodo-pago-btn" data-metodo="Efectivo">
+                        <i class="fas fa-money-bill"></i>
+                        Efectivo
+                    </button>
+                    <button class="metodo-pago-btn" data-metodo="Tarjeta">
+                        <i class="fas fa-credit-card"></i>
+                        Tarjeta
+                    </button>
+                    <button class="metodo-pago-btn" data-metodo="Transferencia">
+                        <i class="fas fa-university"></i>
+                        Transferencia
+                    </button>
+                </div>
             </div>
             
-            <button class="btn-procesar" id="btnProcesar" disabled>
-                <i class="fas fa-check-circle"></i>
-                Procesar Venta
-            </button>
+            <div class="btn-procesar-container">
+                <button class="btn-procesar" id="btnProcesar" disabled>
+                    <i class="fas fa-check-circle"></i>
+                    Procesar Venta
+                </button>
+            </div>
         </aside>
         
-         <div class="usuario-info">
-        <div class="online-indicator">
-            <span class="online-dot"></span>
-            <span>En línea</span>
+        <div class="usuario-info">
+            <div class="online-indicator">
+                <span class="online-dot"></span>
+                <span>En línea</span>
+            </div>
+            <i class="fas fa-user-circle"></i>
+            <span>Administrador</span>
         </div>
-        <i class="fas fa-user-circle"></i>
-        <span>Administrador</span>
-    </div>
-    <!-- Modal para ticket -->
-    <div class="modal" id="modalTicket">
-        <div class="modal-contenido">
-            <div id="ticketContenido"></div>
-            <button onclick="document.getElementById('modalTicket').style.display='none'" 
-                    style="margin-top: 1rem; padding: 0.5rem; width: 100%; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                Cerrar
-            </button>
+        
+        <!-- Modal para ticket -->
+        <div class="modal" id="modalTicket">
+            <div class="modal-contenido">
+                <div id="ticketContenido"></div>
+                <button onclick="document.getElementById('modalTicket').style.display='none'" 
+                        style="margin-top: 1rem; padding: 0.5rem; width: 100%; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Cerrar
+                </button>
+            </div>
         </div>
     </div>
     

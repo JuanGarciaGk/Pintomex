@@ -22,9 +22,10 @@ CREATE TABLE ventas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     folio VARCHAR(20) UNIQUE NOT NULL,
     subtotal DECIMAL(10,2) NOT NULL,
-    impuestos DECIMAL(10,2) NOT NULL,
     total DECIMAL(10,2) NOT NULL,
     metodo_pago ENUM('Efectivo', 'Tarjeta', 'Transferencia') NOT NULL,
+    efectivo_recibido DECIMAL(10,2) NULL,
+    cambio DECIMAL(10,2) NULL,
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

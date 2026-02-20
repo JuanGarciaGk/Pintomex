@@ -1,4 +1,4 @@
-// Clase principal del POS - VERSIÓN MEJORADA
+// Clase principal del POS
 class POSSystem {
     constructor() {
         this.carrito = [];
@@ -14,14 +14,12 @@ class POSSystem {
         this.actualizarCarrito();
         this.initResponsive();
         
-        // Enfocar input de escáner automáticamente
         setTimeout(() => {
             document.getElementById('codigoBarras').focus();
         }, 500);
     }
     
     initResponsive() {
-        // Crear botones para móvil si no existen
         if (!document.querySelector('.toggle-carrito-mobile')) {
             const toggleCarrito = document.createElement('button');
             toggleCarrito.className = 'toggle-carrito-mobile';
@@ -44,7 +42,6 @@ class POSSystem {
             });
         }
         
-        // Cerrar sidebar al hacer clic fuera en móvil
         document.addEventListener('click', (e) => {
             if (window.innerWidth <= 992) {
                 const sidebar = document.querySelector('.sidebar');
@@ -58,7 +55,6 @@ class POSSystem {
     }
     
     cargarEventos() {
-        // Escáner de código de barras
         const inputCodigo = document.getElementById('codigoBarras');
         if (inputCodigo) {
             inputCodigo.addEventListener('keypress', (e) => {
@@ -69,7 +65,6 @@ class POSSystem {
             });
         }
         
-        // Botón de escáner
         const btnScanner = document.querySelector('.btn-escanner');
         if (btnScanner) {
             btnScanner.addEventListener('click', () => {
@@ -80,7 +75,6 @@ class POSSystem {
             });
         }
         
-        // Filtros de categoría
         document.querySelectorAll('.filtro-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
@@ -90,16 +84,26 @@ class POSSystem {
             });
         });
         
-        // Métodos de pago
         document.querySelectorAll('.metodo-pago-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.metodo-pago-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 this.metodoPagoActivo = e.target.dataset.metodo;
+                
+                const efectivoSection = document.getElementById('efectivoSection');
+                if (efectivoSection) {
+                    efectivoSection.style.display = this.metodoPagoActivo === 'Efectivo' ? 'block' : 'none';
+                }
             });
         });
         
-        // Botón procesar venta
+        const efectivoInput = document.getElementById('efectivoRecibido');
+        if (efectivoInput) {
+            efectivoInput.addEventListener('input', () => {
+                this.calcularCambio();
+            });
+        }
+        
         const btnProcesar = document.getElementById('btnProcesar');
         if (btnProcesar) {
             btnProcesar.addEventListener('click', () => {
@@ -107,7 +111,6 @@ class POSSystem {
             });
         }
         
-        // Cerrar carrito al hacer clic fuera en móvil
         document.addEventListener('click', (e) => {
             if (window.innerWidth <= 992) {
                 const carritoPanel = document.querySelector('.carrito-panel');
@@ -122,7 +125,6 @@ class POSSystem {
     
     async cargarProductos() {
         try {
-            // Simulación de carga de productos (en producción usarías fetch a tu PHP)
             this.productos = [
                 { id: 1, codigo_barras: '7501234567891', nombre: 'Pintura Blanca Mate', descripcion: 'Blanco, 19L', categoria: 'Interiores', marca: 'Comex', precio_venta: 450.50, stock_actual: 20, stock_minimo: 5 },
                 { id: 2, codigo_barras: '7501234567892', nombre: 'Rodillo Pro 9"', descripcion: 'Alta calidad', categoria: 'Todos', marca: 'Wooster', precio_venta: 89.90, stock_actual: 15, stock_minimo: 3 },
@@ -184,7 +186,6 @@ class POSSystem {
     async buscarPorCodigo(codigo) {
         if (!codigo) return;
         
-        // Simulación de búsqueda (en producción usarías fetch)
         const producto = this.productos.find(p => 
             p.codigo_barras === codigo || p.nombre.toLowerCase().includes(codigo.toLowerCase())
         );
@@ -236,13 +237,11 @@ class POSSystem {
     
     actualizarCarrito() {
         const subtotal = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
-        const impuestos = subtotal * 0.16;
-        const total = subtotal + impuestos;
+        const total = subtotal;
         
         this.renderizarCarrito({
             items: this.carrito,
             subtotal: subtotal,
-            impuestos: impuestos,
             total: total
         });
     }
@@ -292,14 +291,31 @@ class POSSystem {
     
     actualizarTotales(data) {
         const subtotalEl = document.getElementById('subtotal');
-        const impuestosEl = document.getElementById('impuestos');
         const totalEl = document.getElementById('total');
         const btnProcesar = document.getElementById('btnProcesar');
         
         if (subtotalEl) subtotalEl.textContent = `$${data.subtotal.toFixed(2)}`;
-        if (impuestosEl) impuestosEl.textContent = `$${data.impuestos.toFixed(2)}`;
         if (totalEl) totalEl.textContent = `$${data.total.toFixed(2)}`;
         if (btnProcesar) btnProcesar.disabled = data.items.length === 0;
+        
+        this.calcularCambio();
+    }
+    
+    calcularCambio() {
+        const efectivo = parseFloat(document.getElementById('efectivoRecibido')?.value) || 0;
+        const total = parseFloat(document.getElementById('total')?.textContent.replace('$', '')) || 0;
+        const cambio = efectivo - total;
+        
+        const cambioEl = document.getElementById('cambio');
+        if (cambioEl) {
+            if (cambio >= 0) {
+                cambioEl.textContent = `$${cambio.toFixed(2)}`;
+                cambioEl.style.color = 'var(--success)';
+            } else {
+                cambioEl.textContent = `$${cambio.toFixed(2)}`;
+                cambioEl.style.color = 'var(--danger)';
+            }
+        }
     }
     
     modificarCantidad(productoId, cantidad) {
@@ -338,23 +354,34 @@ class POSSystem {
             return;
         }
         
+        if (this.metodoPagoActivo === 'Efectivo') {
+            const efectivo = parseFloat(document.getElementById('efectivoRecibido')?.value) || 0;
+            const total = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
+            
+            if (efectivo < total) {
+                this.mostrarNotificacion('El efectivo recibido es insuficiente', 'error');
+                return;
+            }
+        }
+        
         const subtotal = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
-        const impuestos = subtotal * 0.16;
-        const total = subtotal + impuestos;
+        const total = subtotal;
         
         const venta = {
             folio: 'VENTA-' + new Date().getTime(),
             fecha: new Date().toLocaleString(),
             items: [...this.carrito],
             subtotal: subtotal,
-            impuestos: impuestos,
             total: total,
-            metodo_pago: this.metodoPagoActivo
+            metodo_pago: this.metodoPagoActivo,
+            efectivo_recibido: this.metodoPagoActivo === 'Efectivo' ? 
+                parseFloat(document.getElementById('efectivoRecibido')?.value) : null,
+            cambio: this.metodoPagoActivo === 'Efectivo' ? 
+                parseFloat(document.getElementById('efectivoRecibido')?.value) - total : null
         };
         
         this.mostrarTicket(venta);
         
-        // Actualizar stock
         this.carrito.forEach(item => {
             const producto = this.productos.find(p => p.id === item.id);
             if (producto) {
@@ -362,15 +389,21 @@ class POSSystem {
             }
         });
         
-        // Vaciar carrito
         this.carrito = [];
         this.actualizarCarrito();
         this.mostrarProductos(this.productos);
         this.mostrarNotificacion('Venta procesada exitosamente', 'success');
         
-        // Resetear método de pago
         this.metodoPagoActivo = null;
         document.querySelectorAll('.metodo-pago-btn').forEach(b => b.classList.remove('active'));
+        const efectivoSection = document.getElementById('efectivoSection');
+        if (efectivoSection) {
+            efectivoSection.style.display = 'none';
+        }
+        const efectivoInput = document.getElementById('efectivoRecibido');
+        if (efectivoInput) {
+            efectivoInput.value = '0.00';
+        }
     }
     
     mostrarTicket(venta) {
@@ -385,6 +418,20 @@ class POSSystem {
                 <span>$${item.subtotal.toFixed(2)}</span>
             </div>
         `).join('');
+        
+        let pagoHTML = '';
+        if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
+            pagoHTML = `
+                <div class="ticket-item">
+                    <span>Efectivo recibido:</span>
+                    <span>$${venta.efectivo_recibido.toFixed(2)}</span>
+                </div>
+                <div class="ticket-item">
+                    <span>Cambio:</span>
+                    <span>$${venta.cambio.toFixed(2)}</span>
+                </div>
+            `;
+        }
         
         contenido.innerHTML = `
             <div class="ticket">
@@ -402,10 +449,7 @@ class POSSystem {
                         <span>Subtotal:</span>
                         <span>$${venta.subtotal.toFixed(2)}</span>
                     </div>
-                    <div class="ticket-item">
-                        <span>IVA 16%:</span>
-                        <span>$${venta.impuestos.toFixed(2)}</span>
-                    </div>
+                    ${pagoHTML}
                     <div class="ticket-item">
                         <span>Método de pago:</span>
                         <span>${venta.metodo_pago}</span>
@@ -423,7 +467,6 @@ class POSSystem {
         
         modal.style.display = 'flex';
         
-        // Cerrar modal al hacer clic fuera
         modal.onclick = (e) => {
             if (e.target === modal) {
                 modal.style.display = 'none';
@@ -469,7 +512,6 @@ class POSSystem {
     }
 }
 
-// Inicializar sistema cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', () => {
     window.pos = new POSSystem();
 });

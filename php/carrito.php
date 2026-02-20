@@ -75,13 +75,11 @@ class Carrito {
             $subtotal += $item['subtotal'];
         }
         
-        $impuestos = $subtotal * 0.16; // IVA 16%
-        $total = $subtotal + $impuestos;
+        $total = $subtotal;
         
         return [
             'items' => $carrito,
             'subtotal' => $subtotal,
-            'impuestos' => $impuestos,
             'total' => $total
         ];
     }
@@ -93,7 +91,7 @@ class Carrito {
     }
     
     // Procesar venta
-    public function procesarVenta($metodo_pago) {
+    public function procesarVenta($metodo_pago, $efectivo_recibido = null, $cambio = null) {
         global $conn;
         
         $carrito = $this->obtener();
@@ -108,11 +106,13 @@ class Carrito {
             // Crear venta
             $folio = generarFolio();
             $subtotal = $carrito['subtotal'];
-            $impuestos = $carrito['impuestos'];
             $total = $carrito['total'];
             
-            $sql = "INSERT INTO ventas (folio, subtotal, impuestos, total, metodo_pago) 
-                    VALUES ('$folio', $subtotal, $impuestos, $total, '$metodo_pago')";
+            $efectivo_recibido = $efectivo_recibido ? $efectivo_recibido : 'NULL';
+            $cambio = $cambio ? $cambio : 'NULL';
+            
+            $sql = "INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio) 
+                    VALUES ('$folio', $subtotal, $total, '$metodo_pago', $efectivo_recibido, $cambio)";
             $conn->query($sql);
             $venta_id = $conn->insert_id;
             
@@ -178,7 +178,9 @@ if (isset($_POST['accion'])) {
             break;
             
         case 'procesar':
-            echo json_encode($carrito->procesarVenta($_POST['metodo_pago']));
+            $efectivo_recibido = isset($_POST['efectivo_recibido']) ? floatval($_POST['efectivo_recibido']) : null;
+            $cambio = isset($_POST['cambio']) ? floatval($_POST['cambio']) : null;
+            echo json_encode($carrito->procesarVenta($_POST['metodo_pago'], $efectivo_recibido, $cambio));
             break;
     }
 }
