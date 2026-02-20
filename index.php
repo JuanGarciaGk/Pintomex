@@ -112,7 +112,6 @@
             </button>
         </aside>
         
-        <!-- Info del usuario -->
          <div class="usuario-info">
         <div class="online-indicator">
             <span class="online-dot"></span>
