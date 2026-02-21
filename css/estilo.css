@@ -1,8 +1,8 @@
 /* Variables de color - Psicología de colores */
 :root {
-    --primary: #2C3E50;    /* Azul oscuro - Confianza, profesionalismo */
-    --secondary: #E67E22;  /* Naranja - Energía, acción, llamada a atención */
-    --success: #27AE60;    /* Verde - Éxito, positivo */
+    --primary: rgb(46, 33, 104);    /* Azul oscuro - Confianza, profesionalismo */
+    --secondary: #2b7c30;  /* Naranja - Energía, acción, llamada a atención */
+    --success: #2b7c30;    /* Verde - Éxito, positivo */
     --danger: #E74C3C;     /* Rojo - Alertas, errores */
     --warning: #F39C12;    /* Amarillo - Advertencias */
     --light: #ECF0F1;      /* Gris claro - Neutral, limpio */
@@ -242,7 +242,11 @@ body {
     font-size: 0.75rem;
     color: var(--gray);
     display: -webkit-box;
+    display: box; /* opcional para estándar futuro */
+    
     -webkit-line-clamp: 2;
+    line-clamp: 2; /* propiedad estándar */
+
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
