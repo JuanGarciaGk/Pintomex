@@ -3,7 +3,7 @@ class POSSystem {
     constructor() {
         this.carrito = [];
         this.productos = [];
-        this.categoriaActiva = 'Todos';
+        this.categoriaActiva = 'Todas';
         this.metodoPagoActivo = null;
         this.init();
     }
@@ -87,11 +87,9 @@ class POSSystem {
         
         // Manejo de métodos de pago
         document.querySelectorAll('.metodo-pago-btn').forEach(btn => {
-            // Remover event listeners anteriores
             btn.replaceWith(btn.cloneNode(true));
         });
         
-        // Volver a seleccionar los botones después del reemplazo
         document.querySelectorAll('.metodo-pago-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -99,41 +97,32 @@ class POSSystem {
                 
                 const metodo = e.currentTarget.dataset.metodo;
                 
-                // Remover clase active de todos
                 document.querySelectorAll('.metodo-pago-btn').forEach(b => {
                     b.classList.remove('active');
                 });
                 
-                // Agregar clase active al seleccionado
                 e.currentTarget.classList.add('active');
-                
-                // Actualizar método de pago
                 this.metodoPagoActivo = metodo;
                 
-                // Mostrar/ocultar sección de efectivo
                 const efectivoSection = document.getElementById('efectivoSection');
                 if (efectivoSection) {
                     if (metodo === 'Efectivo') {
                         efectivoSection.style.display = 'block';
-                        // Limpiar el campo de efectivo
                         const efectivoInput = document.getElementById('efectivoRecibido');
                         if (efectivoInput) {
                             efectivoInput.value = '';
                         }
-                        // Actualizar cambio
                         this.calcularCambio();
                     } else {
                         efectivoSection.style.display = 'none';
                     }
                 }
                 
-                // Forzar actualización del botón procesar
                 const btnProcesar = document.getElementById('btnProcesar');
                 if (btnProcesar) {
                     btnProcesar.disabled = this.carrito.length === 0;
                 }
                 
-                // Feedback visual
                 this.mostrarNotificacion(`Método de pago: ${metodo}`, 'success');
             });
         });
@@ -144,7 +133,6 @@ class POSSystem {
                 this.calcularCambio();
             });
             
-            // Validar al perder el foco
             efectivoInput.addEventListener('blur', () => {
                 this.validarEfectivo();
             });
@@ -172,7 +160,6 @@ class POSSystem {
     agregarRippleEffect() {
         document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
             button.addEventListener('click', function(e) {
-                // Solo aplicar ripple, sin efectos de escala
                 const ripple = document.createElement('span');
                 ripple.classList.add('ripple');
                 
@@ -185,7 +172,6 @@ class POSSystem {
                 ripple.style.left = x + 'px';
                 ripple.style.top = y + 'px';
                 
-                // Remover ripples anteriores
                 const existingRipple = button.querySelector('.ripple');
                 if (existingRipple) {
                     existingRipple.remove();
@@ -205,13 +191,16 @@ class POSSystem {
     async cargarProductos() {
         try {
             this.productos = [
-                { id: 1, codigo_barras: '7501234567891', nombre: 'Pintura Blanca Mate', descripcion: 'Blanco, 19L', categoria: 'Interiores', marca: 'Comex', precio_venta: 450.50, stock_actual: 20, stock_minimo: 5 },
-                { id: 2, codigo_barras: '7501234567892', nombre: 'Rodillo Pro 9"', descripcion: 'Alta calidad', categoria: 'Todos', marca: 'Wooster', precio_venta: 89.90, stock_actual: 15, stock_minimo: 3 },
-                { id: 3, codigo_barras: '7501234567893', nombre: 'Pintura Azul Cielo', descripcion: 'Azul cielo, 4L', categoria: 'Interiores', marca: 'Berel', precio_venta: 250.00, stock_actual: 8, stock_minimo: 5 },
-                { id: 4, codigo_barras: '7501234567894', nombre: 'Pintura Exterior Blanca', descripcion: 'Blanco exterior, 19L', categoria: 'Exteriores', marca: 'Comex', precio_venta: 520.00, stock_actual: 6, stock_minimo: 5 },
-                { id: 5, codigo_barras: '7501234567895', nombre: 'Brocha Plana 3"', descripcion: 'Cerda sintética', categoria: 'Todos', marca: 'Wooster', precio_venta: 75.00, stock_actual: 12, stock_minimo: 5 },
-                { id: 6, codigo_barras: '7501234567896', nombre: 'Pintura Verde Olivo', descripcion: 'Verde olivo, 4L', categoria: 'Exteriores', marca: 'Berel', precio_venta: 280.00, stock_actual: 4, stock_minimo: 5 },
-                { id: 7, codigo_barras: '7501234567897', nombre: 'Cinta de Enmascarar', descripcion: '24mm x 50m', categoria: 'Todos', marca: '3M', precio_venta: 45.50, stock_actual: 25, stock_minimo: 10 }
+                { id: 1, codigo_barras: '7501234567891', nombre: 'Pintura Blanca Mate', descripcion: 'Blanco, 19L', categoria: 'Acrílicas', marca: 'Comex', precio_venta: 450.50, stock_actual: 20, stock_minimo: 5 },
+                { id: 2, codigo_barras: '7501234567892', nombre: 'Rodillo Pro 9"', descripcion: 'Alta calidad', categoria: 'Complementos', marca: 'Wooster', precio_venta: 89.90, stock_actual: 15, stock_minimo: 3 },
+                { id: 3, codigo_barras: '7501234567893', nombre: 'Pintura Azul Cielo', descripcion: 'Azul cielo, 4L', categoria: 'Acrílicas', marca: 'Berel', precio_venta: 250.00, stock_actual: 8, stock_minimo: 5 },
+                { id: 4, codigo_barras: '7501234567894', nombre: 'Esmalte Blanco Brillante', descripcion: 'Blanco brillante, 4L', categoria: 'Esmaltes', marca: 'Comex', precio_venta: 380.00, stock_actual: 6, stock_minimo: 5 },
+                { id: 5, codigo_barras: '7501234567895', nombre: 'Sellador Acrílico', descripcion: 'Sellador para interiores, 19L', categoria: 'Selladores', marca: 'Berel', precio_venta: 420.00, stock_actual: 12, stock_minimo: 5 },
+                { id: 6, codigo_barras: '7501234567896', nombre: 'Barniz Marino', descripcion: 'Barniz para exteriores, 4L', categoria: 'Barniz', marca: 'Vínimex', precio_venta: 550.00, stock_actual: 4, stock_minimo: 5 },
+                { id: 7, codigo_barras: '7501234567897', nombre: 'Aerosol Negro Mate', descripcion: 'Pintura en aerosol, 400ml', categoria: 'Aerosol', marca: 'Aeropak', precio_venta: 85.50, stock_actual: 25, stock_minimo: 10 },
+                { id: 8, codigo_barras: '7501234567898', nombre: 'Impermeabilizante Acrílico', descripcion: 'Impermeabilizante blanco, 19L', categoria: 'Impermeabilizante', marca: 'Fester', precio_venta: 890.00, stock_actual: 3, stock_minimo: 5 },
+                { id: 9, codigo_barras: '7501234567899', nombre: 'Cinta de Enmascarar', descripcion: '24mm x 50m', categoria: 'Complementos', marca: '3M', precio_venta: 45.50, stock_actual: 25, stock_minimo: 10 },
+                { id: 10, codigo_barras: '7501234567900', nombre: 'Esmalte Negro Brillante', descripcion: 'Negro brillante, 1L', categoria: 'Esmaltes', marca: 'Vínimex', precio_venta: 150.00, stock_actual: 15, stock_minimo: 5 }
             ];
             this.mostrarProductos(this.productos);
         } catch (error) {
@@ -252,11 +241,11 @@ class POSSystem {
     }
     
     filtrarProductos() {
-        if (this.categoriaActiva === 'Todos') {
+        if (this.categoriaActiva === 'Todas') {
             this.mostrarProductos(this.productos);
         } else {
             const filtrados = this.productos.filter(p => 
-                p.categoria === this.categoriaActiva || p.categoria === 'Todos'
+                p.categoria === this.categoriaActiva
             );
             this.mostrarProductos(filtrados);
         }
@@ -384,7 +373,6 @@ class POSSystem {
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (!efectivoInput) return;
         
-        // Si el campo está vacío, no mostrar cambio
         if (!efectivoInput.value || efectivoInput.value === '') {
             const cambioEl = document.getElementById('cambio');
             if (cambioEl) {
@@ -420,14 +408,12 @@ class POSSystem {
         const efectivo = parseFloat(efectivoInput.value);
         const total = parseFloat(document.getElementById('total')?.textContent.replace('$', '')) || 0;
         
-        // Si no hay valor o es inválido
         if (!efectivoInput.value || efectivoInput.value === '' || isNaN(efectivo) || efectivo <= 0) {
             document.getElementById('cambio').textContent = '$0.00';
             document.getElementById('cambio').style.color = 'var(--gray)';
             return;
         }
         
-        // Calcular cambio
         const cambio = efectivo - total;
         const cambioEl = document.getElementById('cambio');
         
@@ -476,27 +462,23 @@ class POSSystem {
             return;
         }
         
-        // Validación para efectivo
         if (this.metodoPagoActivo === 'Efectivo') {
             const efectivoInput = document.getElementById('efectivoRecibido');
             const efectivo = parseFloat(efectivoInput?.value);
             const total = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
             
-            // Validar que se haya ingresado una cantidad
             if (!efectivoInput?.value || efectivoInput.value === '') {
                 this.mostrarNotificacion('Ingrese la cantidad de efectivo recibido', 'warning');
                 efectivoInput.focus();
                 return;
             }
             
-            // Validar que sea un número válido
             if (isNaN(efectivo) || efectivo <= 0) {
                 this.mostrarNotificacion('Ingrese una cantidad válida', 'warning');
                 efectivoInput.focus();
                 return;
             }
             
-            // Validar que el efectivo sea suficiente
             if (efectivo < total) {
                 this.mostrarNotificacion('El efectivo recibido es insuficiente', 'error');
                 efectivoInput.focus();
@@ -528,7 +510,6 @@ class POSSystem {
         
         this.mostrarTicket(venta);
         
-        // Actualizar stock
         this.carrito.forEach(item => {
             const producto = this.productos.find(p => p.id === item.id);
             if (producto) {
@@ -536,13 +517,11 @@ class POSSystem {
             }
         });
         
-        // Limpiar carrito y resetear todo
         this.carrito = [];
         this.actualizarCarrito();
         this.mostrarProductos(this.productos);
         this.mostrarNotificacion('Venta procesada exitosamente', 'success');
         
-        // Resetear todo
         this.metodoPagoActivo = null;
         document.querySelectorAll('.metodo-pago-btn').forEach(b => b.classList.remove('active'));
         
@@ -553,7 +532,7 @@ class POSSystem {
         
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (efectivoInput) {
-            efectivoInput.value = ''; // Vacío en lugar de 0.00
+            efectivoInput.value = '';
         }
     }
     
@@ -587,7 +566,7 @@ class POSSystem {
         contenido.innerHTML = `
             <div class="ticket">
                 <div class="ticket-header">
-                    <h2>Pintumex</h2>
+                    <h2>🏪 Pintumex</h2>
                     <p>Punto de Venta</p>
                     <p>${venta.fecha}</p>
                     <p><strong>Folio: ${venta.folio}</strong></p>
@@ -605,15 +584,19 @@ class POSSystem {
                         <span>Método de pago:</span>
                         <span>${venta.metodo_pago}</span>
                     </div>
-                    <div class="ticket-item" style="font-weight: bold; font-size: 1.1rem; margin-top: 0.5rem;">
-                        <span>Total:</span>
+                    <div class="ticket-item">
+                        <span>TOTAL:</span>
                         <span>$${venta.total.toFixed(2)}</span>
                     </div>
                 </div>
-                <div style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem;">
+                <div>
                     <p>¡Gracias por su compra!</p>
+                    <p>Vuelva pronto</p>
                 </div>
             </div>
+            <button onclick="document.getElementById('modalTicket').style.display='none'">
+                Cerrar Ticket
+            </button>
         `;
         
         modal.style.display = 'flex';

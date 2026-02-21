@@ -51,9 +51,14 @@
                 </div>
                 
                 <div class="filtros-categoria">
-                    <button class="filtro-btn active">Todos</button>
-                    <button class="filtro-btn">Interiores</button>
-                    <button class="filtro-btn">Exteriores</button>
+                    <button class="filtro-btn active">Todas</button>
+                    <button class="filtro-btn">Acrílicas</button>
+                    <button class="filtro-btn">Esmaltes</button>
+                    <button class="filtro-btn">Selladores</button>
+                    <button class="filtro-btn">Barniz</button>
+                    <button class="filtro-btn">Aerosol</button>
+                    <button class="filtro-btn">Impermeabilizante</button>
+                    <button class="filtro-btn">Complementos</button>
                 </div>
                 
                 <!-- Grid de productos -->
