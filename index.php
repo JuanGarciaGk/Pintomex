@@ -6,6 +6,65 @@
     <title>Pintumex - Punto de Venta</title>
     <link rel="stylesheet" href="css/estilo.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Estilos adicionales para mejorar la experiencia del escáner */
+        .escanner-input {
+            position: relative;
+        }
+        
+        #codigoBarras {
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            padding-right: 40px;
+        }
+        
+        #codigoBarras:focus {
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.2);
+        }
+        
+        /* Indicador visual de escáner activo */
+        .escanner-input::after {
+            content: '\f02a';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            right: 130px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--secondary);
+            font-size: 1.2rem;
+            opacity: 0.7;
+            pointer-events: none;
+            animation: parpadeo 1.5s infinite;
+        }
+        
+        @keyframes parpadeo {
+            0% { opacity: 0.7; }
+            50% { opacity: 0.3; }
+            100% { opacity: 0.7; }
+        }
+        
+        /* Mensaje de ayuda */
+        .escanner-hint {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .escanner-hint i {
+            color: var(--secondary);
+        }
+        
+        @media (max-width: 768px) {
+            .escanner-input::after {
+                right: 15px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="sistema-pos">
@@ -40,11 +99,17 @@
         
         <!-- Contenido principal -->
         <main class="contenido-principal">
-            <!-- Sección de escáner -->
+            <!-- Sección de escáner automático -->
             <section class="escanner-section">
                 <div class="escanner-input">
-                    <input type="text" id="codigoBarras" placeholder="Escanear código de barras o escribir para buscar..." autofocus>
-                    <button class="btn-escanner">
+                    <input type="text" 
+                           id="codigoBarras" 
+                           placeholder="Escanear código de barras..." 
+                           autofocus 
+                           autocomplete="off"
+                           spellcheck="false">
+                    <!-- Botón oculto pero funcional (por si acaso) -->
+                    <button class="btn-escanner" style="display: none;" id="btnEscannerOculto">
                         <i class="fas fa-barcode"></i>
                         Escanear
                     </button>
@@ -90,19 +155,23 @@
                 </div>
                 
                 <!-- Sección de efectivo (oculta por defecto y sin valor inicial) -->
-<div id="efectivoSection" style="display: none;">
-    <div class="total-row">
-        <span>Efectivo recibido:</span>
-        <span>
-            <input type="number" id="efectivoRecibido" min="0" step="0.01" placeholder="0.00" 
-                style="width: 100px; padding: 0.2rem; border: 1px solid var(--light); border-radius: 4px; text-align: right;">
-        </span>
-    </div>
-    <div class="total-row">
-        <span>Cambio:</span>
-        <span id="cambio">$0.00</span>
-    </div>
-</div>
+                <div id="efectivoSection" style="display: none;">
+                    <div class="total-row">
+                        <span>Efectivo recibido:</span>
+                        <span>
+                            <input type="number" 
+                                   id="efectivoRecibido" 
+                                   min="0" 
+                                   step="0.01" 
+                                   placeholder="0.00" 
+                                   style="width: 100px; padding: 0.2rem; border: 1px solid var(--light); border-radius: 4px; text-align: right;">
+                        </span>
+                    </div>
+                    <div class="total-row">
+                        <span>Cambio:</span>
+                        <span id="cambio">$0.00</span>
+                    </div>
+                </div>
                 
                 <div class="total-row grande">
                     <span>Total:</span>

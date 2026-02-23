@@ -191,7 +191,7 @@ class POSSystem {
     async cargarProductos() {
         try {
             this.productos = [
-                { id: 1, codigo_barras: '7501234567891', nombre: 'Pintura Blanca Mate', descripcion: 'Blanco, 19L', categoria: 'Acrílicas', marca: 'Comex', precio_venta: 450.50, stock_actual: 20, stock_minimo: 5 },
+                { id: 1, codigo_barras: '7501357071482', nombre: 'Pintura Blanca Mate', descripcion: 'Blanco, 19L', categoria: 'Acrílicas', marca: 'Comex', precio_venta: 450.50, stock_actual: 20, stock_minimo: 5 },
                 { id: 2, codigo_barras: '7501234567892', nombre: 'Rodillo Pro 9"', descripcion: 'Alta calidad', categoria: 'Complementos', marca: 'Wooster', precio_venta: 89.90, stock_actual: 15, stock_minimo: 3 },
                 { id: 3, codigo_barras: '7501234567893', nombre: 'Pintura Azul Cielo', descripcion: 'Azul cielo, 4L', categoria: 'Acrílicas', marca: 'Berel', precio_venta: 250.00, stock_actual: 8, stock_minimo: 5 },
                 { id: 4, codigo_barras: '7501234567894', nombre: 'Esmalte Blanco Brillante', descripcion: 'Blanco brillante, 4L', categoria: 'Esmaltes', marca: 'Comex', precio_venta: 380.00, stock_actual: 6, stock_minimo: 5 },
@@ -266,29 +266,37 @@ class POSSystem {
         }
     }
     
+    // VERSIÓN MEJORADA CON VALIDACIÓN DE STOCK
     async agregarAlCarrito(productoId, cantidad = 1) {
         const producto = this.productos.find(p => p.id === productoId);
-        
+
         if (!producto) {
             this.mostrarNotificacion('Producto no encontrado', 'error');
             return;
         }
-        
+
+        // Buscar si el producto ya existe en el carrito
         const itemExistente = this.carrito.find(item => item.id === productoId);
-        
-        if (itemExistente) {
-            const nuevaCantidad = itemExistente.cantidad + cantidad;
-            if (nuevaCantidad > producto.stock_actual) {
-                this.mostrarNotificacion('Stock insuficiente', 'error');
-                return;
+
+        // Calcular la cantidad total que se estaría intentando añadir al carrito
+        const cantidadSolicitadaTotal = itemExistente ? itemExistente.cantidad + cantidad : cantidad;
+
+        // VERIFICACIÓN CRÍTICA: Comparar la cantidad total solicitada con el stock real
+        if (cantidadSolicitadaTotal > producto.stock_actual) {
+            let mensaje = `Stock insuficiente. `;
+            if (itemExistente) {
+                mensaje += `Ya tienes ${itemExistente.cantidad} en el carrito. `;
             }
-            itemExistente.cantidad = nuevaCantidad;
+            mensaje += `Stock disponible: ${producto.stock_actual}.`;
+            this.mostrarNotificacion(mensaje, 'error');
+            return;
+        }
+
+        // --- Si la validación pasa, procedemos a agregar/modificar el carrito ---
+        if (itemExistente) {
+            itemExistente.cantidad += cantidad;
             itemExistente.subtotal = itemExistente.cantidad * itemExistente.precio;
         } else {
-            if (cantidad > producto.stock_actual) {
-                this.mostrarNotificacion('Stock insuficiente', 'error');
-                return;
-            }
             this.carrito.push({
                 id: producto.id,
                 nombre: producto.nombre,
@@ -299,7 +307,7 @@ class POSSystem {
                 subtotal: cantidad * producto.precio_venta
             });
         }
-        
+
         this.actualizarCarrito();
     }
     
@@ -537,36 +545,36 @@ class POSSystem {
     }
     
     mostrarTicket(venta) {
-    const modal = document.getElementById('modalTicket');
-    const contenido = document.getElementById('ticketContenido');
-    
-    if (!modal || !contenido) return;
-    
-    const itemsHTML = venta.items.map(item => `
-        <div class="ticket-item">
-            <span>${item.cantidad}x ${item.nombre}</span>
-            <span>$${item.subtotal.toFixed(2)}</span>
-        </div>
-    `).join('');
-    
-    let pagoHTML = '';
-    if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
-        pagoHTML = `
+        const modal = document.getElementById('modalTicket');
+        const contenido = document.getElementById('ticketContenido');
+        
+        if (!modal || !contenido) return;
+        
+        const itemsHTML = venta.items.map(item => `
             <div class="ticket-item">
-                <span>Efectivo recibido:</span>
-                <span>$${venta.efectivo_recibido.toFixed(2)}</span>
+                <span>${item.cantidad}x ${item.nombre}</span>
+                <span>$${item.subtotal.toFixed(2)}</span>
             </div>
-            <div class="ticket-item">
-                <span>Cambio:</span>
-                <span>$${venta.cambio.toFixed(2)}</span>
-            </div>
-        `;
-    }
-    
-    contenido.innerHTML = `
-        <div class="ticket">
-            <div class="ticket-header">
-                <h2>🏪 Pintumex</h2>
+        `).join('');
+        
+        let pagoHTML = '';
+        if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
+            pagoHTML = `
+                <div class="ticket-item">
+                    <span>Efectivo recibido:</span>
+                    <span>$${venta.efectivo_recibido.toFixed(2)}</span>
+                </div>
+                <div class="ticket-item">
+                    <span>Cambio:</span>
+                    <span>$${venta.cambio.toFixed(2)}</span>
+                </div>
+            `;
+        }
+        
+        contenido.innerHTML = `
+            <div class="ticket">
+                <div class="ticket-header">
+                    <h2>🏪 Pintumex</h2>
                     <p>Punto de Venta</p>
                     <p>${venta.fecha}</p>
                     <p><strong>Folio: ${venta.folio}</strong></p>
@@ -594,17 +602,16 @@ class POSSystem {
                     <p>Vuelva pronto</p>
                 </div>
             </div>
-        </div>
-    `;
-    
-    modal.style.display = 'flex';
-    
-    modal.onclick = (e) => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-}
+        `;
+        
+        modal.style.display = 'flex';
+        
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+    }
     
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
