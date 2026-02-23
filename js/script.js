@@ -537,36 +537,36 @@ class POSSystem {
     }
     
     mostrarTicket(venta) {
-        const modal = document.getElementById('modalTicket');
-        const contenido = document.getElementById('ticketContenido');
-        
-        if (!modal || !contenido) return;
-        
-        const itemsHTML = venta.items.map(item => `
+    const modal = document.getElementById('modalTicket');
+    const contenido = document.getElementById('ticketContenido');
+    
+    if (!modal || !contenido) return;
+    
+    const itemsHTML = venta.items.map(item => `
+        <div class="ticket-item">
+            <span>${item.cantidad}x ${item.nombre}</span>
+            <span>$${item.subtotal.toFixed(2)}</span>
+        </div>
+    `).join('');
+    
+    let pagoHTML = '';
+    if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
+        pagoHTML = `
             <div class="ticket-item">
-                <span>${item.cantidad}x ${item.nombre}</span>
-                <span>$${item.subtotal.toFixed(2)}</span>
+                <span>Efectivo recibido:</span>
+                <span>$${venta.efectivo_recibido.toFixed(2)}</span>
             </div>
-        `).join('');
-        
-        let pagoHTML = '';
-        if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
-            pagoHTML = `
-                <div class="ticket-item">
-                    <span>Efectivo recibido:</span>
-                    <span>$${venta.efectivo_recibido.toFixed(2)}</span>
-                </div>
-                <div class="ticket-item">
-                    <span>Cambio:</span>
-                    <span>$${venta.cambio.toFixed(2)}</span>
-                </div>
-            `;
-        }
-        
-        contenido.innerHTML = `
-            <div class="ticket">
-                <div class="ticket-header">
-                    <h2>🏪 Pintumex</h2>
+            <div class="ticket-item">
+                <span>Cambio:</span>
+                <span>$${venta.cambio.toFixed(2)}</span>
+            </div>
+        `;
+    }
+    
+    contenido.innerHTML = `
+        <div class="ticket">
+            <div class="ticket-header">
+                <h2>🏪 Pintumex</h2>
                     <p>Punto de Venta</p>
                     <p>${venta.fecha}</p>
                     <p><strong>Folio: ${venta.folio}</strong></p>
@@ -594,19 +594,17 @@ class POSSystem {
                     <p>Vuelva pronto</p>
                 </div>
             </div>
-            <button onclick="document.getElementById('modalTicket').style.display='none'">
-                Cerrar Ticket
-            </button>
-        `;
-        
-        modal.style.display = 'flex';
-        
-        modal.onclick = (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-            }
-        };
-    }
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+}
     
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
