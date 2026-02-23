@@ -1070,3 +1070,149 @@ body {
 .toggle-menu-mobile {
     display: none;
 }
+
+/* ============================================ */
+/* NUEVOS ESTILOS PARA EL BUSCADOR PREDICTIVO */
+/* ============================================ */
+
+.buscador-container {
+    position: relative;
+    width: 100%;
+}
+
+.sugerencias-lista {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid var(--light);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    display: none;
+}
+
+.sugerencias-lista.active {
+    display: block;
+}
+
+.sugerencia-item {
+    padding: 0.8rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--light);
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sugerencia-item:last-child {
+    border-bottom: none;
+}
+
+.sugerencia-item:hover,
+.sugerencia-item.active {
+    background: var(--secondary);
+    color: white;
+}
+
+.sugerencia-item:hover .sugerencia-precio,
+.sugerencia-item.active .sugerencia-precio {
+    color: white;
+    opacity: 1;
+}
+
+.sugerencia-info {
+    flex: 1;
+}
+
+.sugerencia-nombre {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--dark);
+    margin-bottom: 0.2rem;
+}
+
+.sugerencia-item:hover .sugerencia-nombre,
+.sugerencia-item.active .sugerencia-nombre {
+    color: white;
+}
+
+.sugerencia-descripcion {
+    font-size: 0.85rem;
+    color: var(--gray);
+    display: flex;
+    gap: 1rem;
+}
+
+.sugerencia-item:hover .sugerencia-descripcion,
+.sugerencia-item.active .sugerencia-descripcion {
+    color: rgba(255,255,255,0.9);
+}
+
+.sugerencia-codigo {
+    font-family: monospace;
+    background: var(--light);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+}
+
+.sugerencia-item:hover .sugerencia-codigo,
+.sugerencia-item.active .sugerencia-codigo {
+    background: rgba(255,255,255,0.2);
+}
+
+.sugerencia-precio {
+    font-weight: bold;
+    color: var(--secondary);
+    font-size: 1.2rem;
+    margin-left: 1rem;
+    min-width: 80px;
+    text-align: right;
+}
+
+.sugerencia-stock {
+    font-size: 0.8rem;
+    color: var(--gray);
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.sugerencia-item:hover .sugerencia-stock,
+.sugerencia-item.active .sugerencia-stock {
+    color: rgba(255,255,255,0.9);
+}
+
+.stock-bajo-sugerencia {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+/* Responsive para sugerencias */
+@media (max-width: 768px) {
+    .sugerencias-lista {
+        max-height: 250px;
+    }
+    
+    .sugerencia-item {
+        padding: 0.6rem 0.8rem;
+    }
+    
+    .sugerencia-nombre {
+        font-size: 0.9rem;
+    }
+    
+    .sugerencia-descripcion {
+        font-size: 0.75rem;
+    }
+    
+    .sugerencia-precio {
+        font-size: 1rem;
+        min-width: 60px;
+    }
+}

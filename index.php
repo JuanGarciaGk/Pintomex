@@ -101,18 +101,22 @@
         <main class="contenido-principal">
             <!-- Sección de escáner automático -->
             <section class="escanner-section">
-                <div class="escanner-input">
-                    <input type="text" 
-                           id="codigoBarras" 
-                           placeholder="Escanear código de barras..." 
-                           autofocus 
-                           autocomplete="off"
-                           spellcheck="false">
-                    <!-- Botón oculto pero funcional (por si acaso) -->
-                    <button class="btn-escanner" style="display: none;" id="btnEscannerOculto">
-                        <i class="fas fa-barcode"></i>
-                        Escanear
-                    </button>
+                <div class="buscador-container">
+                    <div class="escanner-input">
+                        <input type="text" 
+                               id="codigoBarras" 
+                               placeholder="Buscar por código, nombre..." 
+                               autofocus 
+                               autocomplete="off"
+                               spellcheck="false">
+                        <!-- Botón oculto pero funcional (por si acaso) -->
+                        <button class="btn-escanner" style="display: none;" id="btnEscannerOculto">
+                            <i class="fas fa-barcode"></i>
+                            Buscar
+                        </button>
+                    </div>
+                    <!-- Contenedor para las sugerencias de búsqueda -->
+                    <div id="sugerencias" class="sugerencias-lista"></div>
                 </div>
                 
                 <div class="filtros-categoria">

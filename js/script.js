@@ -14,6 +14,7 @@ class POSSystem {
         this.actualizarCarrito();
         this.initResponsive();
         this.agregarRippleEffect();
+        this.iniciarBuscadorPredictivo();
         
         setTimeout(() => {
             document.getElementById('codigoBarras').focus();
@@ -60,8 +61,24 @@ class POSSystem {
         if (inputCodigo) {
             inputCodigo.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    this.buscarPorCodigo(e.target.value);
-                    e.target.value = '';
+                    // Verificar si hay un elemento activo en sugerencias (para navegación por teclado)
+                    const sugerencias = document.getElementById('sugerencias');
+                    const activeItem = sugerencias?.querySelector('.sugerencia-item.active');
+                    
+                    if (activeItem) {
+                        // Si hay un item activo (seleccionado con teclado), lo agregamos
+                        const productoId = activeItem.dataset.id;
+                        if (productoId) {
+                            this.agregarAlCarrito(parseInt(productoId));
+                            inputCodigo.value = '';
+                            sugerencias.classList.remove('active');
+                            sugerencias.innerHTML = '';
+                        }
+                    } else {
+                        // Si no, buscamos normalmente
+                        this.buscarPorCodigo(e.target.value);
+                        e.target.value = '';
+                    }
                 }
             });
         }
@@ -251,16 +268,36 @@ class POSSystem {
         }
     }
     
-    async buscarPorCodigo(codigo) {
-        if (!codigo) return;
+    async buscarPorCodigo(termino) {
+        if (!termino) return;
         
-        const producto = this.productos.find(p => 
-            p.codigo_barras === codigo || p.nombre.toLowerCase().includes(codigo.toLowerCase())
+        const terminoLower = termino.toLowerCase().trim();
+        
+        // 1. Intentar búsqueda exacta por código de barras (comportamiento original del escáner)
+        const productoExacto = this.productos.find(p => 
+            p.codigo_barras === termino
         );
         
-        if (producto) {
-            this.agregarAlCarrito(producto.id);
-            this.mostrarNotificacion(`${producto.nombre} agregado al carrito`, 'success');
+        if (productoExacto) {
+            this.agregarAlCarrito(productoExacto.id);
+            this.mostrarNotificacion(`${productoExacto.nombre} agregado al carrito`, 'success');
+            return;
+        }
+        
+        // 2. Si no es código exacto, buscar por nombre o descripción (búsqueda mejorada)
+        const productosEncontrados = this.productos.filter(p => 
+            p.nombre.toLowerCase().includes(terminoLower) || 
+            (p.descripcion && p.descripcion.toLowerCase().includes(terminoLower))
+        );
+        
+        if (productosEncontrados.length === 1) {
+            // Si solo hay un resultado, lo agregamos directamente
+            this.agregarAlCarrito(productosEncontrados[0].id);
+            this.mostrarNotificacion(`${productosEncontrados[0].nombre} agregado al carrito`, 'success');
+        } else if (productosEncontrados.length > 1) {
+            // Si hay múltiples resultados, mostramos sugerencias manualmente
+            this.buscarSugerencias(termino);
+            this.mostrarNotificacion(`Múltiples productos encontrados. Selecciona uno.`, 'info');
         } else {
             this.mostrarNotificacion('Producto no encontrado', 'error');
         }
@@ -309,6 +346,13 @@ class POSSystem {
         }
 
         this.actualizarCarrito();
+        
+        // Cerrar sugerencias después de agregar
+        const sugerencias = document.getElementById('sugerencias');
+        if (sugerencias) {
+            sugerencias.classList.remove('active');
+            sugerencias.innerHTML = '';
+        }
     }
     
     actualizarCarrito() {
@@ -648,6 +692,170 @@ class POSSystem {
                 }
             }, 300);
         }, 2700);
+    }
+    
+    // MÉTODO NUEVO: Búsqueda predictiva (autocompletado)
+    iniciarBuscadorPredictivo() {
+        const inputBusqueda = document.getElementById('codigoBarras');
+        const sugerenciasDiv = document.getElementById('sugerencias');
+        
+        if (!inputBusqueda || !sugerenciasDiv) return;
+        
+        let timeoutId = null;
+        
+        inputBusqueda.addEventListener('input', (e) => {
+            const termino = e.target.value.trim();
+            
+            // Limpiar timeout anterior para no saturar de búsquedas (debounce)
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            
+            if (termino.length < 2) {
+                sugerenciasDiv.classList.remove('active');
+                sugerenciasDiv.innerHTML = '';
+                return;
+            }
+            
+            // Esperar 300ms después de que el usuario deje de escribir para buscar
+            timeoutId = setTimeout(() => {
+                this.buscarSugerencias(termino);
+            }, 300);
+        });
+        
+        // Cerrar sugerencias si hacen clic fuera
+        document.addEventListener('click', (e) => {
+            if (!inputBusqueda.contains(e.target) && !sugerenciasDiv.contains(e.target)) {
+                sugerenciasDiv.classList.remove('active');
+            }
+        });
+        
+        // Navegación con teclado (flechas arriba/abajo y enter)
+        inputBusqueda.addEventListener('keydown', (e) => {
+            const items = sugerenciasDiv.querySelectorAll('.sugerencia-item');
+            if (items.length === 0) return;
+            
+            const activeItem = sugerenciasDiv.querySelector('.sugerencia-item.active');
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!activeItem) {
+                    items[0].classList.add('active');
+                } else {
+                    const next = activeItem.nextElementSibling;
+                    if (next) {
+                        activeItem.classList.remove('active');
+                        next.classList.add('active');
+                        
+                        // Scroll automático
+                        next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!activeItem) {
+                    items[items.length - 1].classList.add('active');
+                    items[items.length - 1].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } else {
+                    const prev = activeItem.previousElementSibling;
+                    if (prev) {
+                        activeItem.classList.remove('active');
+                        prev.classList.add('active');
+                        
+                        // Scroll automático
+                        prev.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
+                }
+            }
+        });
+    }
+    
+    // MÉTODO NUEVO: Buscar sugerencias (con lógica difusa mejorada)
+    buscarSugerencias(termino) {
+        const sugerenciasDiv = document.getElementById('sugerencias');
+        if (!sugerenciasDiv) return;
+        
+        const terminoLower = termino.toLowerCase().trim();
+        
+        // Función simple de búsqueda difusa (coincidencia parcial y por palabras)
+        const productosCoincidentes = this.productos.filter(producto => {
+            // Búsqueda por código de barras (coincidencia exacta o parcial)
+            if (producto.codigo_barras.toLowerCase().includes(terminoLower)) {
+                return true;
+            }
+            
+            // Búsqueda por nombre (coincidencia de palabras sueltas)
+            const nombreLower = producto.nombre.toLowerCase();
+            if (nombreLower.includes(terminoLower)) {
+                return true;
+            }
+            
+            // Búsqueda por palabras sueltas del nombre
+            const palabrasTermino = terminoLower.split(' ').filter(p => p.length > 1);
+            const palabrasNombre = nombreLower.split(' ');
+            
+            for (let palabraTermino of palabrasTermino) {
+                for (let palabraNombre of palabrasNombre) {
+                    if (palabraNombre.includes(palabraTermino) || palabraTermino.includes(palabraNombre)) {
+                        return true;
+                    }
+                }
+            }
+            
+            // Búsqueda por descripción
+            if (producto.descripcion && producto.descripcion.toLowerCase().includes(terminoLower)) {
+                return true;
+            }
+            
+            return false;
+        }).slice(0, 8); // Limitar a 8 sugerencias para no saturar
+        
+        if (productosCoincidentes.length === 0) {
+            sugerenciasDiv.classList.remove('active');
+            sugerenciasDiv.innerHTML = '';
+            return;
+        }
+        
+        // Generar HTML de sugerencias
+        sugerenciasDiv.innerHTML = productosCoincidentes.map(producto => `
+            <div class="sugerencia-item" data-id="${producto.id}">
+                <div class="sugerencia-info">
+                    <div class="sugerencia-nombre">${producto.nombre}</div>
+                    <div class="sugerencia-descripcion">
+                        <span class="sugerencia-codigo">${producto.codigo_barras}</span>
+                        <span>${producto.descripcion || ''}</span>
+                    </div>
+                    <div class="sugerencia-stock ${producto.stock_actual <= producto.stock_minimo ? 'stock-bajo-sugerencia' : ''}">
+                        <i class="fas fa-box"></i> Stock: ${producto.stock_actual}
+                    </div>
+                </div>
+                <div class="sugerencia-precio">$${producto.precio_venta.toFixed(2)}</div>
+            </div>
+        `).join('');
+        
+        sugerenciasDiv.classList.add('active');
+        
+        // Agregar event listeners a las sugerencias
+        sugerenciasDiv.querySelectorAll('.sugerencia-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const productoId = item.dataset.id;
+                if (productoId) {
+                    this.agregarAlCarrito(parseInt(productoId));
+                    document.getElementById('codigoBarras').value = '';
+                    sugerenciasDiv.classList.remove('active');
+                    sugerenciasDiv.innerHTML = '';
+                }
+            });
+            
+            // Para navegación con mouse
+            item.addEventListener('mouseenter', () => {
+                // Remover active de todos
+                sugerenciasDiv.querySelectorAll('.sugerencia-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+                item.classList.add('active');
+            });
+        });
     }
 }
 
