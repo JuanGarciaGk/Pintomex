@@ -7,3 +7,4 @@ git fetch origin
 git branch -r
 git checkout -b fernando origin/fernando
 git switch master
+hacer un merge entre rama master y rama fernando
