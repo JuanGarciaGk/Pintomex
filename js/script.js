@@ -1,3 +1,4 @@
+// js/script.js
 class POSSystem {
     constructor() {
         this.carrito = [];
@@ -5,27 +6,50 @@ class POSSystem {
         this.categoriaActiva = 'Todas';
         this.metodoPagoActivo = null;
         this.cargando = false;
-        this.apiUrl = 'php/api.php'; // Ruta correcta
-        this.init();
+        this.apiUrl = 'php/api.php';
     }
-    
+
     async init() {
+        console.log('Inicializando POSSystem...');
+
+        // Tareas Inmediatas (Críticas para la Interacción)
         this.cargarEventos();
-        await this.cargarProductosDesdeBD();
-        this.actualizarCarrito();
         this.initResponsive();
         this.agregarRippleEffect();
         this.iniciarBuscadorPredictivo();
-        
+
+        // Tareas Diferidas (No bloqueantes, se ejecutan después)
         setTimeout(() => {
-            document.getElementById('codigoBarras').focus();
+            this.verificarConexionBD();
+        }, 100);
+
+        setTimeout(() => {
+            this.cargarProductosDesdeBD();
+        }, 200);
+
+        setTimeout(() => {
+            this.actualizarCarrito();
+        }, 300);
+
+        setTimeout(() => {
+            document.getElementById('codigoBarras')?.focus();
         }, 500);
     }
-    
+
+    async verificarConexionBD() {
+        try {
+            const response = await fetch(this.apiUrl + '?accion=getProductos');
+            if (!response.ok) throw new Error('Error de conexión');
+            const data = await response.json();
+            console.log('✅ Conexión exitosa a la BD, productos cargados:', data.length);
+        } catch (error) {
+            console.error('❌ Error conectando a la BD:', error);
+        }
+    }
+
     async cargarProductosDesdeBD() {
         this.mostrarCargando(true);
         try {
-            // CORREGIDO: this.apiUrl + ?accion=
             const response = await fetch(this.apiUrl + '?accion=getProductos');
             
             if (!response.ok) {
@@ -42,7 +66,7 @@ class POSSystem {
             this.mostrarCargando(false);
         }
     }
-    
+
     mostrarCargando(mostrar) {
         const grid = document.getElementById('productosGrid');
         if (!grid) return;
@@ -76,7 +100,7 @@ class POSSystem {
             }
         }
     }
-    
+
     async agregarAlCarrito(productoId, cantidad = 1) {
         if (this.cargando) return;
         this.cargando = true;
@@ -120,12 +144,11 @@ class POSSystem {
             document.getElementById('codigoBarras').value = '';
         }
     }
-    
+
     async buscarPorCodigo(termino) {
         if (!termino || this.cargando) return;
         
         try {
-            // CORREGIDO
             const response = await fetch(this.apiUrl + '?accion=buscarPorCodigo&codigo=' + encodeURIComponent(termino));
             
             if (!response.ok) {
@@ -144,7 +167,7 @@ class POSSystem {
             this.mostrarNotificacion('Error en la búsqueda: ' + error.message, 'error');
         }
     }
-    
+
     async buscarSugerencias(termino) {
         const sugerenciasDiv = document.getElementById('sugerencias');
         if (!sugerenciasDiv) return;
@@ -156,7 +179,6 @@ class POSSystem {
         }
         
         try {
-            // CORREGIDO
             const response = await fetch(this.apiUrl + '?accion=buscarProductos&termino=' + encodeURIComponent(termino));
             
             if (!response.ok) {
@@ -202,10 +224,9 @@ class POSSystem {
             console.error('Error en sugerencias:', error);
         }
     }
-    
+
     async actualizarCarrito() {
         try {
-            // CORREGIDO
             const response = await fetch(this.apiUrl + '?accion=getCarrito');
             
             if (!response.ok) {
@@ -219,7 +240,7 @@ class POSSystem {
             console.error('Error actualizando carrito:', error);
         }
     }
-    
+
     async modificarCantidad(productoId, cantidad) {
         if (this.cargando) return;
         this.cargando = true;
@@ -249,7 +270,7 @@ class POSSystem {
             this.cargando = false;
         }
     }
-    
+
     async eliminarDelCarrito(productoId) {
         if (this.cargando) return;
         this.cargando = true;
@@ -279,11 +300,10 @@ class POSSystem {
             this.cargando = false;
         }
     }
-    
+
     async filtrarProductos() {
         this.mostrarCargando(true);
         try {
-            // CORREGIDO
             const response = await fetch(this.apiUrl + '?accion=getProductosPorCategoria&categoria=' + encodeURIComponent(this.categoriaActiva));
             
             if (!response.ok) {
@@ -299,7 +319,7 @@ class POSSystem {
             this.mostrarCargando(false);
         }
     }
-    
+
     async procesarVenta() {
         if (this.carrito.length === 0) {
             this.mostrarNotificacion('El carrito está vacío', 'warning');
@@ -396,7 +416,7 @@ class POSSystem {
             this.cargando = false;
         }
     }
-    
+
     mostrarProductos(productos) {
         const grid = document.getElementById('productosGrid');
         if (!grid) return;
@@ -424,7 +444,7 @@ class POSSystem {
             });
         });
     }
-    
+
     renderizarCarrito(data) {
         const container = document.getElementById('carritoItems');
         if (!container) return;
@@ -475,7 +495,7 @@ class POSSystem {
         
         this.calcularCambio();
     }
-    
+
     cargarEventos() {
         const inputCodigo = document.getElementById('codigoBarras');
         if (inputCodigo) {
@@ -548,7 +568,7 @@ class POSSystem {
         
         this.initResponsive();
     }
-    
+
     initResponsive() {
         if (!document.querySelector('.toggle-carrito-mobile')) {
             const toggleCarrito = document.createElement('button');
@@ -572,34 +592,60 @@ class POSSystem {
             });
         }
     }
-    
+
     agregarRippleEffect() {
         document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
             button.addEventListener('click', function(e) {
-                const ripple = document.createElement('span');
-                ripple.classList.add('ripple');
+                // Optimización de animación con transform
                 
-                const rect = button.getBoundingClientRect();
+                // Asegurar que el botón tenga posición relativa para el efecto
+                if (getComputedStyle(this).position !== 'relative') {
+                    this.style.position = 'relative';
+                    this.style.overflow = 'hidden';
+                }
+
+                // Crear o reutilizar un elemento ripple
+                let ripple = this.querySelector('.ripple-effect');
+                if (!ripple) {
+                    ripple = document.createElement('span');
+                    ripple.className = 'ripple-effect';
+                    ripple.style.position = 'absolute';
+                    ripple.style.borderRadius = '50%';
+                    ripple.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
+                    ripple.style.transform = 'scale(0)';
+                    ripple.style.opacity = '1';
+                    ripple.style.pointerEvents = 'none';
+                    ripple.style.transition = 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s linear';
+                    this.appendChild(ripple);
+                }
+
+                // Posicionar y animar con transform
+                const rect = this.getBoundingClientRect();
                 const size = Math.max(rect.width, rect.height);
                 const x = e.clientX - rect.left - size / 2;
                 const y = e.clientY - rect.top - size / 2;
-                
+
                 ripple.style.width = ripple.style.height = size + 'px';
                 ripple.style.left = x + 'px';
                 ripple.style.top = y + 'px';
                 
-                const existingRipple = button.querySelector('.ripple');
-                if (existingRipple) existingRipple.remove();
+                // Forzar un reflow mínimo para que la animación se reinicie
+                ripple.offsetHeight; 
                 
-                button.appendChild(ripple);
-                
+                ripple.style.transform = 'scale(4)';
+                ripple.style.opacity = '0';
+
+                // Limpiar después de la animación
                 setTimeout(() => {
-                    if (ripple && ripple.parentNode) ripple.remove();
-                }, 600);
+                    if (ripple && ripple.parentNode) {
+                        ripple.style.transform = 'scale(0)';
+                        ripple.style.opacity = '1';
+                    }
+                }, 500);
             });
         });
     }
-    
+
     iniciarBuscadorPredictivo() {
         const inputBusqueda = document.getElementById('codigoBarras');
         const sugerenciasDiv = document.getElementById('sugerencias');
@@ -661,7 +707,7 @@ class POSSystem {
             }
         });
     }
-    
+
     calcularCambio() {
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (!efectivoInput) return;
@@ -693,7 +739,7 @@ class POSSystem {
             }
         }
     }
-    
+
     mostrarTicket(venta) {
         const modal = document.getElementById('modalTicket');
         const contenido = document.getElementById('ticketContenido');
@@ -762,7 +808,7 @@ class POSSystem {
             }
         };
     }
-    
+
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
         notificacion.className = `notificacion notificacion-${tipo}`;
@@ -801,6 +847,14 @@ class POSSystem {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Inicialización cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.pos = new POSSystem();
+        window.pos.init();
+    });
+} else {
+    // DOM ya está cargado
     window.pos = new POSSystem();
-});
+    window.pos.init();
+}

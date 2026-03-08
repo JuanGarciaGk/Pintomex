@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pintumex - Punto de Venta</title>
-    <link rel="stylesheet" href="css/estilo.css">
+    
+    <!-- Carga crítica de Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Precarga y carga no bloqueante de estilos locales -->
+    <link rel="preload" href="css/estilo.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/estilo.css"></noscript>
+    
+    <!-- Estilos críticos en línea -->
     <style>
         .escanner-input { position: relative; }
         #codigoBarras {
@@ -207,20 +214,6 @@
         </div>
     </div>
     
-    <script src="js/script.js"></script>
-    <script>
-        // Verificar conexión a la BD
-        fetch('php/api.php?accion=getProductos')
-            .then(response => {
-                if (!response.ok) throw new Error('Error de conexión');
-                return response.json();
-            })
-            .then(data => {
-                console.log('✅ Conexión exitosa a la BD, productos cargados:', data.length);
-            })
-            .catch(error => {
-                console.error('❌ Error conectando a la BD:', error);
-            });
-    </script>
+    <script src="js/script.js" async></script>
 </body>
 </html>
