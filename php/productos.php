@@ -3,7 +3,6 @@ require_once 'config.php';
 
 class Productos {
     
-    // Buscar producto por código de barras
     public function buscarPorCodigo($codigo) {
         global $conn;
         
@@ -21,7 +20,6 @@ class Productos {
         return null;
     }
     
-    // Buscar productos por término
     public function buscar($termino) {
         global $conn;
         
@@ -44,7 +42,6 @@ class Productos {
         return $productos;
     }
     
-    // Obtener productos por categoría
     public function porCategoria($categoria) {
         global $conn;
         
@@ -67,7 +64,6 @@ class Productos {
         return $productos;
     }
     
-    // Obtener todos los productos
     public function todos() {
         global $conn;
         
@@ -83,7 +79,6 @@ class Productos {
         return $productos;
     }
     
-    // Obtener producto por ID
     public function obtenerPorId($id) {
         global $conn;
         
@@ -106,7 +101,6 @@ class Productos {
         return null;
     }
     
-    // Obtener productos con stock bajo
     public function stockBajo() {
         global $conn;
         

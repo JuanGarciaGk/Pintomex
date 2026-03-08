@@ -6,7 +6,6 @@ require_once 'carrito.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, must-revalidate');
 
-// Validación de origen
 $origen = $_SERVER['HTTP_REFERER'] ?? '';
 if (strpos($origen, $_SERVER['HTTP_HOST']) === false && $origen != '') {
     echo json_encode(['success' => false, 'message' => 'Origen no válido']);
@@ -19,7 +18,6 @@ $carrito = new Carrito();
 $accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
 
 switch ($accion) {
-    // PRODUCTOS
     case 'getProductos':
         echo json_encode($productos->todos());
         break;
@@ -39,7 +37,6 @@ switch ($accion) {
         echo json_encode($productos->buscarPorCodigo($codigo));
         break;
     
-    // CARRITO
     case 'agregarCarrito':
         if (!isset($_POST['producto_id'])) {
             echo json_encode(['success' => false, 'message' => 'ID requerido']);

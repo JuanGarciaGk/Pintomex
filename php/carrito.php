@@ -4,7 +4,6 @@ require_once 'productos.php';
 
 class Carrito {
     
-    // Agregar producto al carrito
     public function agregar($producto_id, $cantidad = 1) {
         global $conn;
         
@@ -15,7 +14,6 @@ class Carrito {
             return ['success' => false, 'message' => 'Datos inválidos'];
         }
         
-        // Verificar producto y stock
         $stmt = $conn->prepare("SELECT * FROM productos WHERE id = ?");
         $stmt->bind_param("i", $producto_id);
         $stmt->execute();
@@ -33,7 +31,6 @@ class Carrito {
             return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
         }
         
-        // Agregar al carrito en sesión
         if (!isset($_SESSION['carrito'][$producto_id])) {
             $_SESSION['carrito'][$producto_id] = [
                 'id' => $producto['id'],
@@ -55,7 +52,6 @@ class Carrito {
         return ['success' => true, 'carrito' => $this->obtener()];
     }
     
-    // Modificar cantidad
     public function modificar($producto_id, $cantidad) {
         $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
         $cantidad = filter_var($cantidad, FILTER_VALIDATE_INT);
@@ -76,7 +72,6 @@ class Carrito {
         return $this->obtener();
     }
     
-    // Eliminar producto
     public function eliminar($producto_id) {
         $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
         
@@ -86,7 +81,6 @@ class Carrito {
         return $this->obtener();
     }
     
-    // Obtener carrito con cálculos
     public function obtener() {
         $carrito = array_values($_SESSION['carrito']);
         $subtotal = 0;
@@ -103,13 +97,11 @@ class Carrito {
         ];
     }
     
-    // Vaciar carrito
     public function vaciar() {
         $_SESSION['carrito'] = [];
         return $this->obtener();
     }
     
-    // Procesar venta
     public function procesarVenta($metodo_pago, $efectivo_recibido = null, $cambio = null) {
         global $conn;
         
@@ -124,7 +116,6 @@ class Carrito {
             return ['success' => false, 'message' => 'Carrito vacío'];
         }
         
-        // Validar efectivo si aplica
         if ($metodo_pago === 'Efectivo') {
             $efectivo_recibido = filter_var($efectivo_recibido, FILTER_VALIDATE_FLOAT);
             $cambio = filter_var($cambio, FILTER_VALIDATE_FLOAT);
@@ -141,7 +132,6 @@ class Carrito {
         $conn->begin_transaction();
         
         try {
-            // Validar stock nuevamente
             foreach ($carrito['items'] as $item) {
                 $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ? FOR UPDATE");
                 $stmt->bind_param("i", $item['id']);
@@ -155,7 +145,6 @@ class Carrito {
                 }
             }
             
-            // Crear venta
             $folio = generarFolio();
             
             $stmt = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio) VALUES (?, ?, ?, ?, ?, ?)");
@@ -164,15 +153,12 @@ class Carrito {
             $venta_id = $conn->insert_id;
             $stmt->close();
             
-            // Registrar detalles y actualizar inventario
             foreach ($carrito['items'] as $item) {
-                // Detalle de venta
                 $stmt = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)");
                 $stmt->bind_param("iiidd", $venta_id, $item['id'], $item['cantidad'], $item['precio'], $item['subtotal']);
                 $stmt->execute();
                 $stmt->close();
                 
-                // Obtener stock anterior
                 $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
                 $stmt->bind_param("i", $item['id']);
                 $stmt->execute();
@@ -183,13 +169,11 @@ class Carrito {
                 
                 $stock_nuevo = $stock_anterior - $item['cantidad'];
                 
-                // Actualizar stock
                 $stmt = $conn->prepare("UPDATE productos SET stock_actual = ? WHERE id = ?");
                 $stmt->bind_param("ii", $stock_nuevo, $item['id']);
                 $stmt->execute();
                 $stmt->close();
                 
-                // Registrar movimiento
                 $justificacion = "Venta #$folio";
                 $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'salida', ?, ?, ?, ?)");
                 $stmt->bind_param("iiiss", $item['id'], $item['cantidad'], $stock_anterior, $stock_nuevo, $justificacion);

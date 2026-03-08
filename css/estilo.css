@@ -1,17 +1,19 @@
-/* Variables de color - Psicología de colores */
 :root {
-    --primary: rgb(46, 33, 104);    /* Azul oscuro - Confianza, profesionalismo */
-    --secondary: #2b7c30;  /* Naranja - Energía, acción, llamada a atención */
-    --success: #2b7c30;    /* Verde - Éxito, positivo */
-    --danger: #E74C3C;     /* Rojo - Alertas, errores */
-    --warning: #F39C12;    /* Amarillo - Advertencias */
-    --light: #ECF0F1;      /* Gris claro - Neutral, limpio */
-    --dark: #34495E;       /* Azul grisáceo - Estabilidad */
+    --primary: #2E2168;
+    --primary-light: #4A3A8C;
+    --secondary: #2b7c30;
+    --secondary-dark: #2b7c30;
+    --success: #2b7c30;
+    --success-dark: #1e5f22;
+    --danger: #C53030;
+    --warning: #2b7c30;
+    --light: #E5E7EB;
+    --dark: #1F2937;
     --white: #FFFFFF;
-    --gray: #95A5A6;
+    --gray: #4B5563;
+    --gray-light: #9CA3AF;
 }
 
-/* Reset y estilos generales */
 * {
     margin: 0;
     padding: 0;
@@ -23,9 +25,20 @@ body {
     background-color: var(--light);
     color: var(--dark);
     overflow: hidden;
+    line-height: 1.5;
 }
 
-/* Layout principal */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
 .sistema-pos {
     display: grid;
     grid-template-columns: 250px 1fr 350px;
@@ -33,7 +46,6 @@ body {
     overflow: hidden;
 }
 
-/* Sidebar */
 .sidebar {
     background: var(--primary);
     color: var(--white);
@@ -56,7 +68,7 @@ body {
 
 .logo p {
     font-size: 0.9rem;
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 .menu {
@@ -78,7 +90,7 @@ body {
 
 .menu-item:hover,
 .menu-item.active {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.15);
     border-left-color: var(--secondary);
 }
 
@@ -87,7 +99,6 @@ body {
     color: var(--secondary);
 }
 
-/* Contenido principal */
 .contenido-principal {
     padding: 1.5rem;
     overflow-y: auto;
@@ -95,7 +106,6 @@ body {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-/* Escáner */
 .escanner-section {
     background: var(--white);
     border-radius: 16px;
@@ -119,13 +129,19 @@ body {
     font-size: 1rem;
     transition: all 0.3s;
     background: #f8fafc;
+    color: var(--dark);
 }
 
 .escanner-input input:focus {
-    outline: none;
+    outline: 3px solid rgba(230, 126, 34, 0.4);
+    outline-offset: 2px;
     border-color: var(--secondary);
-    box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.1);
     background: white;
+}
+
+.escanner-input input::placeholder {
+    color: var(--gray);
+    opacity: 0.8;
 }
 
 .btn-escanner {
@@ -143,13 +159,15 @@ body {
     font-weight: 500;
 }
 
-.btn-escanner:hover {
-    background: #d35400;
+.btn-escanner:hover,
+.btn-escanner:focus {
+    background: var(--secondary-dark);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+    outline: 2px solid var(--secondary-dark);
+    outline-offset: 2px;
 }
 
-/* Filtros de categoría */
 .filtros-categoria {
     display: flex;
     gap: 0.8rem;
@@ -158,24 +176,32 @@ body {
 
 .filtro-btn {
     padding: 0.6rem 1.8rem;
-    border: none;
+    border: 2px solid transparent;
     background: var(--light);
     border-radius: 30px;
     cursor: pointer;
     transition: all 0.3s;
     font-weight: 500;
     font-size: 0.95rem;
+    color: var(--dark);
 }
 
 .filtro-btn.active,
-.filtro-btn:hover {
+.filtro-btn:hover,
+.filtro-btn:focus {
     background: var(--secondary);
     color: white;
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(230, 126, 34, 0.2);
+    outline: 2px solid var(--secondary-dark);
+    outline-offset: 2px;
 }
 
-/* Grid de productos */
+.filtro-btn.active {
+    font-weight: 600;
+    border-color: var(--secondary-dark);
+}
+
 .productos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -212,10 +238,13 @@ body {
     flex-direction: column;
 }
 
-.producto-card:hover {
+.producto-card:hover,
+.producto-card:focus {
     transform: translateY(-4px);
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     border-color: var(--secondary);
+    outline: 2px solid var(--secondary);
+    outline-offset: 2px;
 }
 
 .producto-card h3 {
@@ -254,7 +283,6 @@ body {
     font-weight: bold;
 }
 
-/* Panel del carrito - TEXTO MÁS GRANDE */
 .carrito-panel {
     background: var(--white);
     border-left: 2px solid rgba(0,0,0,0.05);
@@ -283,7 +311,6 @@ body {
     font-size: 1.5rem;
 }
 
-/* Contenedor de items con scroll */
 .carrito-items-container {
     flex: 1;
     overflow-y: auto;
@@ -309,7 +336,8 @@ body {
     animation: slideIn 0.3s;
 }
 
-.carrito-item:hover {
+.carrito-item:hover,
+.carrito-item:focus-within {
     border-color: var(--secondary);
     box-shadow: 0 4px 12px rgba(230, 126, 34, 0.15);
 }
@@ -367,7 +395,6 @@ body {
     margin-top: 0.2rem;
 }
 
-/* Controles de cantidad - MÁS GRANDES */
 .cantidad-control {
     display: flex;
     align-items: center;
@@ -394,10 +421,13 @@ body {
     font-size: 1rem;
 }
 
-.cantidad-control button:hover {
+.cantidad-control button:hover,
+.cantidad-control button:focus {
     background: var(--secondary);
     color: white;
     border-color: var(--secondary);
+    outline: 2px solid var(--secondary-dark);
+    outline-offset: 2px;
 }
 
 .cantidad-control input {
@@ -408,15 +438,15 @@ body {
     padding: 0.4rem;
     font-size: 1rem;
     font-weight: 500;
+    color: var(--dark);
 }
 
 .cantidad-control input:focus {
-    outline: none;
+    outline: 3px solid rgba(230, 126, 34, 0.4);
+    outline-offset: 2px;
     border-color: var(--secondary);
-    box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1);
 }
 
-/* Totales - MÁS GRANDES */
 .carrito-totales {
     padding: 1.2rem 1.2rem;
     border-top: 2px solid var(--light);
@@ -429,6 +459,7 @@ body {
     justify-content: space-between;
     margin-bottom: 0.8rem;
     font-size: 1.1rem;
+    color: var(--dark);
 }
 
 .total-row.grande {
@@ -440,7 +471,6 @@ body {
     border-top: 2px solid var(--light);
 }
 
-/* Métodos de pago - MÁS GRANDES */
 .metodos-pago-container {
     padding: 1.2rem 1.2rem;
     border-bottom: 2px solid var(--light);
@@ -469,6 +499,7 @@ body {
     position: relative;
     overflow: hidden;
     font-weight: 500;
+    color: var(--dark);
 }
 
 .metodo-pago-btn i {
@@ -477,21 +508,21 @@ body {
 }
 
 .metodo-pago-btn:hover,
+.metodo-pago-btn:focus,
 .metodo-pago-btn.active {
     background: var(--secondary);
     color: white;
     border-color: var(--secondary);
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(230, 126, 34, 0.25);
+    outline: 2px solid var(--secondary-dark);
+    outline-offset: 2px;
 }
 
 .metodo-pago-btn:hover i,
+.metodo-pago-btn:focus i,
 .metodo-pago-btn.active i {
     color: white;
-}
-
-.metodo-pago-btn:active {
-    transform: scale(0.98);
 }
 
 .metodo-pago-btn.active {
@@ -513,26 +544,6 @@ body {
     }
 }
 
-/* Efecto de ripple */
-.metodo-pago-btn .ripple,
-.filtro-btn .ripple,
-.btn-procesar .ripple {
-    position: absolute;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.5);
-    transform: scale(0);
-    animation: ripple-animation 0.6s linear;
-    pointer-events: none;
-}
-
-@keyframes ripple-animation {
-    to {
-        transform: scale(4);
-        opacity: 0;
-    }
-}
-
-/* Botón procesar venta - MÁS GRANDE */
 .btn-procesar-container {
     padding: 1.2rem 1.2rem 1.8rem;
 }
@@ -561,46 +572,22 @@ body {
     font-size: 1.3rem;
 }
 
-.btn-procesar:hover:not(:disabled) {
-    background: #219a52;
+.btn-procesar:hover:not(:disabled),
+.btn-procesar:focus:not(:disabled) {
+    background: var(--success-dark);
     transform: translateY(-2px) !important;
     box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
-}
-
-.btn-procesar:active {
-    transform: none !important;
-}
-
-.btn-procesar:focus,
-.btn-procesar:active:focus {
-    transform: none !important;
-    outline: none;
+    outline: 2px solid var(--success-dark);
+    outline-offset: 2px;
 }
 
 .btn-procesar:disabled {
-    background: var(--gray);
+    background: var(--gray-light);
+    color: rgba(255, 255, 255, 0.7);
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.8;
 }
 
-/* Prevenir que el botón se agrande al hacer clic */
-.btn-procesar:active {
-    transform: none !important;
-}
-
-.btn-procesar {
-    transform: none !important;
-}
-
-/* Mantener el tamaño fijo del botón */
-.btn-procesar,
-.btn-procesar:hover,
-.btn-procesar:focus,
-.btn-procesar:active {
-    transform: scale(1) !important;
-}
-
-/* Info usuario */
 .usuario-info {
     position: fixed;
     bottom: 1.5rem;
@@ -615,6 +602,7 @@ body {
     border: 2px solid var(--secondary);
     z-index: 100;
     font-size: 0.9rem;
+    color: var(--dark);
 }
 
 .online-indicator {
@@ -643,7 +631,6 @@ body {
     }
 }
 
-/* Mejoras para el campo de efectivo - MÁS GRANDE */
 #efectivoRecibido {
     width: 130px !important;
     padding: 0.6rem !important;
@@ -653,34 +640,21 @@ body {
     transition: all 0.3s !important;
     background: white !important;
     font-weight: 500;
+    color: var(--dark);
 }
 
 #efectivoRecibido:focus {
-    outline: none !important;
+    outline: 3px solid rgba(230, 126, 34, 0.4) !important;
+    outline-offset: 2px !important;
     border-color: var(--secondary) !important;
-    box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.15) !important;
 }
 
 #efectivoRecibido::placeholder {
     color: var(--gray);
-    opacity: 0.7;
+    opacity: 0.8;
     font-size: 0.95rem;
 }
 
-/* Estilo para cuando falta efectivo */
-#efectivoRecibido:invalid {
-    border-color: var(--danger);
-}
-
-/* Indicador visual de campo requerido */
-.total-row:has(#efectivoRecibido) span:first-child::after {
-    content: ' *';
-    color: var(--danger);
-    font-weight: bold;
-    font-size: 1.2rem;
-}
-
-/* Modal de ticket - VERSIÓN MÁS GRANDE */
 .modal {
     display: none;
     position: fixed;
@@ -710,6 +684,7 @@ body {
     font-family: 'Courier New', monospace;
     font-size: 1.1rem;
     line-height: 1.5;
+    color: var(--dark);
 }
 
 .ticket-header {
@@ -786,7 +761,6 @@ body {
     font-size: 1.6rem;
 }
 
-/* Estilo especial para método de pago */
 .ticket-totales .ticket-item:nth-last-child(2) {
     background: #f8fafc;
     padding: 0.8rem;
@@ -800,7 +774,6 @@ body {
     font-weight: bold;
 }
 
-/* Mensaje de agradecimiento */
 .ticket > div:last-child {
     text-align: center;
     margin-top: 2.5rem !important;
@@ -811,63 +784,6 @@ body {
     color: var(--primary);
 }
 
-.ticket > div:last-child p {
-    font-size: 1.2rem;
-    margin: 0.3rem 0;
-}
-
-.ticket > div:last-child p:first-child {
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: var(--secondary);
-}
-
-/* Botón de cerrar ticket */
-.modal-contenido > button {
-    margin-top: 2rem !important;
-    padding: 1rem !important;
-    width: 100%;
-    background: var(--primary) !important;
-    color: white;
-    border: none;
-    border-radius: 12px !important;
-    cursor: pointer;
-    font-size: 1.2rem !important;
-    font-weight: bold;
-    transition: all 0.3s;
-}
-
-.modal-contenido > button:hover {
-    background: var(--secondary) !important;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
-/* Responsive para ticket */
-@media (max-width: 576px) {
-    .modal-contenido {
-        padding: 1.5rem;
-        width: 95%;
-    }
-    
-    .ticket {
-        font-size: 1rem;
-    }
-    
-    .ticket-header h2 {
-        font-size: 1.8rem;
-    }
-    
-    .ticket-totales .ticket-item:last-of-type {
-        font-size: 1.3rem;
-    }
-    
-    .ticket-totales .ticket-item:last-of-type span:last-child {
-        font-size: 1.5rem;
-    }
-}
-
-/* RESPONSIVE DESIGN */
 @media (max-width: 1200px) {
     .sistema-pos {
         grid-template-columns: 220px 1fr 320px;
@@ -962,10 +878,6 @@ body {
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     
-    .escanner-section {
-        margin-top: 0;
-    }
-    
     .productos-grid {
         max-height: calc(100vh - 250px);
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -1023,14 +935,12 @@ body {
     }
 }
 
-/* Utilidades */
 .text-success { color: var(--success); }
 .text-danger { color: var(--danger); }
 .text-warning { color: var(--warning); }
 .bg-primary { background: var(--primary); }
 .bg-secondary { background: var(--secondary); }
 
-/* Notificaciones */
 .notificacion {
     position: fixed;
     top: 20px;
@@ -1065,15 +975,10 @@ body {
     }
 }
 
-/* Botones móvil */
 .toggle-carrito-mobile,
 .toggle-menu-mobile {
     display: none;
 }
-
-/* ============================================ */
-/* NUEVOS ESTILOS PARA EL BUSCADOR PREDICTIVO */
-/* ============================================ */
 
 .buscador-container {
     position: relative;
@@ -1115,12 +1020,16 @@ body {
 }
 
 .sugerencia-item:hover,
+.sugerencia-item:focus,
 .sugerencia-item.active {
     background: var(--secondary);
     color: white;
+    outline: 2px solid var(--secondary-dark);
+    outline-offset: -2px;
 }
 
 .sugerencia-item:hover .sugerencia-precio,
+.sugerencia-item:focus .sugerencia-precio,
 .sugerencia-item.active .sugerencia-precio {
     color: white;
     opacity: 1;
@@ -1138,6 +1047,7 @@ body {
 }
 
 .sugerencia-item:hover .sugerencia-nombre,
+.sugerencia-item:focus .sugerencia-nombre,
 .sugerencia-item.active .sugerencia-nombre {
     color: white;
 }
@@ -1150,6 +1060,7 @@ body {
 }
 
 .sugerencia-item:hover .sugerencia-descripcion,
+.sugerencia-item:focus .sugerencia-descripcion,
 .sugerencia-item.active .sugerencia-descripcion {
     color: rgba(255,255,255,0.9);
 }
@@ -1159,11 +1070,14 @@ body {
     background: var(--light);
     padding: 0.1rem 0.4rem;
     border-radius: 4px;
+    color: var(--dark);
 }
 
 .sugerencia-item:hover .sugerencia-codigo,
+.sugerencia-item:focus .sugerencia-codigo,
 .sugerencia-item.active .sugerencia-codigo {
     background: rgba(255,255,255,0.2);
+    color: white;
 }
 
 .sugerencia-precio {
@@ -1184,6 +1098,7 @@ body {
 }
 
 .sugerencia-item:hover .sugerencia-stock,
+.sugerencia-item:focus .sugerencia-stock,
 .sugerencia-item.active .sugerencia-stock {
     color: rgba(255,255,255,0.9);
 }
@@ -1193,31 +1108,6 @@ body {
     font-weight: bold;
 }
 
-/* Responsive para sugerencias */
-@media (max-width: 768px) {
-    .sugerencias-lista {
-        max-height: 250px;
-    }
-    
-    .sugerencia-item {
-        padding: 0.6rem 0.8rem;
-    }
-    
-    .sugerencia-nombre {
-        font-size: 0.9rem;
-    }
-    
-    .sugerencia-descripcion {
-        font-size: 0.75rem;
-    }
-    
-    .sugerencia-precio {
-        font-size: 1rem;
-        min-width: 60px;
-    }
-}
-/* estilo.css - Añadir al final del archivo */
-
 .ripple-effect {
     position: absolute;
     border-radius: 50%;
@@ -1226,5 +1116,5 @@ body {
     opacity: 1;
     pointer-events: none;
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s linear;
-    will-change: transform, opacity; /* Ayuda al compositor */
+    will-change: transform, opacity;
 }

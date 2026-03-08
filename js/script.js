@@ -1,4 +1,3 @@
-// js/script.js
 class POSSystem {
     constructor() {
         this.carrito = [];
@@ -12,13 +11,11 @@ class POSSystem {
     async init() {
         console.log('Inicializando POSSystem...');
 
-        // Tareas Inmediatas (Críticas para la Interacción)
         this.cargarEventos();
         this.initResponsive();
         this.agregarRippleEffect();
         this.iniciarBuscadorPredictivo();
 
-        // Tareas Diferidas (No bloqueantes, se ejecutan después)
         setTimeout(() => {
             this.verificarConexionBD();
         }, 100);
@@ -596,15 +593,12 @@ class POSSystem {
     agregarRippleEffect() {
         document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
             button.addEventListener('click', function(e) {
-                // Optimización de animación con transform
                 
-                // Asegurar que el botón tenga posición relativa para el efecto
                 if (getComputedStyle(this).position !== 'relative') {
                     this.style.position = 'relative';
                     this.style.overflow = 'hidden';
                 }
 
-                // Crear o reutilizar un elemento ripple
                 let ripple = this.querySelector('.ripple-effect');
                 if (!ripple) {
                     ripple = document.createElement('span');
@@ -619,7 +613,6 @@ class POSSystem {
                     this.appendChild(ripple);
                 }
 
-                // Posicionar y animar con transform
                 const rect = this.getBoundingClientRect();
                 const size = Math.max(rect.width, rect.height);
                 const x = e.clientX - rect.left - size / 2;
@@ -629,13 +622,11 @@ class POSSystem {
                 ripple.style.left = x + 'px';
                 ripple.style.top = y + 'px';
                 
-                // Forzar un reflow mínimo para que la animación se reinicie
                 ripple.offsetHeight; 
                 
                 ripple.style.transform = 'scale(4)';
                 ripple.style.opacity = '0';
 
-                // Limpiar después de la animación
                 setTimeout(() => {
                     if (ripple && ripple.parentNode) {
                         ripple.style.transform = 'scale(0)';
@@ -847,14 +838,12 @@ class POSSystem {
     }
 }
 
-// Inicialización cuando el DOM esté listo
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.pos = new POSSystem();
         window.pos.init();
     });
 } else {
-    // DOM ya está cargado
     window.pos = new POSSystem();
     window.pos.init();
 }
