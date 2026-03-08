@@ -65,7 +65,7 @@ CREATE TABLE movimientos_inventario (
 
 -- Insertar datos de ejemplo
 INSERT INTO productos (codigo_barras, nombre, descripcion, categoria, marca, precio_compra, precio_venta, stock_minimo, stock_actual) VALUES
-('7501234567891', 'Pintura Blanca Mate', 'Blanco, 19L', 'Acrílicas', 'Comex', 350.50, 450.50, 5, 20),
+('7501357071482', 'Pintura Blanca Mate', 'Blanco, 19L', 'Acrílicas', 'Comex', 350.50, 450.50, 5, 20),
 ('7501234567892', 'Rodillo Pro 9"', 'Alta calidad', 'Complementos', 'Wooster', 60.00, 89.90, 3, 15),
 ('7501234567893', 'Pintura Azul Cielo', 'Azul cielo, 4L', 'Acrílicas', 'Berel', 180.00, 250.00, 5, 8),
 ('7501234567894', 'Esmalte Blanco Brillante', 'Blanco brillante, 4L', 'Esmaltes', 'Comex', 280.00, 380.00, 5, 6),

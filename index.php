@@ -7,23 +7,16 @@
     <link rel="stylesheet" href="css/estilo.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Estilos adicionales para mejorar la experiencia del escáner */
-        .escanner-input {
-            position: relative;
-        }
-        
+        .escanner-input { position: relative; }
         #codigoBarras {
             font-size: 1.1rem;
             letter-spacing: 1px;
             padding-right: 40px;
         }
-        
         #codigoBarras:focus {
             border-color: var(--secondary);
             box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.2);
         }
-        
-        /* Indicador visual de escáner activo */
         .escanner-input::after {
             content: '\f02a';
             font-family: 'Font Awesome 6 Free';
@@ -38,14 +31,11 @@
             pointer-events: none;
             animation: parpadeo 1.5s infinite;
         }
-        
         @keyframes parpadeo {
             0% { opacity: 0.7; }
             50% { opacity: 0.3; }
             100% { opacity: 0.7; }
         }
-        
-        /* Mensaje de ayuda */
         .escanner-hint {
             font-size: 0.85rem;
             color: var(--gray);
@@ -54,15 +44,9 @@
             align-items: center;
             gap: 0.5rem;
         }
-        
-        .escanner-hint i {
-            color: var(--secondary);
-        }
-        
+        .escanner-hint i { color: var(--secondary); }
         @media (max-width: 768px) {
-            .escanner-input::after {
-                right: 15px;
-            }
+            .escanner-input::after { right: 15px; }
         }
     </style>
 </head>
@@ -99,7 +83,6 @@
         
         <!-- Contenido principal -->
         <main class="contenido-principal">
-            <!-- Sección de escáner automático -->
             <section class="escanner-section">
                 <div class="buscador-container">
                     <div class="escanner-input">
@@ -109,13 +92,11 @@
                                autofocus 
                                autocomplete="off"
                                spellcheck="false">
-                        <!-- Botón oculto pero funcional (por si acaso) -->
                         <button class="btn-escanner" style="display: none;" id="btnEscannerOculto">
                             <i class="fas fa-barcode"></i>
                             Buscar
                         </button>
                     </div>
-                    <!-- Contenedor para las sugerencias de búsqueda -->
                     <div id="sugerencias" class="sugerencias-lista"></div>
                 </div>
                 
@@ -130,7 +111,6 @@
                     <button class="filtro-btn">Complementos</button>
                 </div>
                 
-                <!-- Grid de productos -->
                 <div class="productos-grid" id="productosGrid">
                     <!-- Productos se cargarán dinámicamente -->
                 </div>
@@ -158,7 +138,6 @@
                     <span id="subtotal">$0.00</span>
                 </div>
                 
-                <!-- Sección de efectivo (oculta por defecto y sin valor inicial) -->
                 <div id="efectivoSection" style="display: none;">
                     <div class="total-row">
                         <span>Efectivo recibido:</span>
@@ -217,7 +196,6 @@
             <span>Administrador</span>
         </div>
         
-        <!-- Modal para ticket -->
         <div class="modal" id="modalTicket">
             <div class="modal-contenido">
                 <div id="ticketContenido"></div>
@@ -230,5 +208,19 @@
     </div>
     
     <script src="js/script.js"></script>
+    <script>
+        // Verificar conexión a la BD
+        fetch('php/api.php?accion=getProductos')
+            .then(response => {
+                if (!response.ok) throw new Error('Error de conexión');
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Conexión exitosa a la BD, productos cargados:', data.length);
+            })
+            .catch(error => {
+                console.error('❌ Error conectando a la BD:', error);
+            });
+    </script>
 </body>
 </html>

@@ -4,11 +4,10 @@ require_once 'productos.php';
 
 class Carrito {
     
-    // Agregar producto al carrito (CONSULTA PREPARADA)
+    // Agregar producto al carrito
     public function agregar($producto_id, $cantidad = 1) {
         global $conn;
         
-        // Validar que sean números
         $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
         $cantidad = filter_var($cantidad, FILTER_VALIDATE_INT);
         
@@ -16,7 +15,7 @@ class Carrito {
             return ['success' => false, 'message' => 'Datos inválidos'];
         }
         
-        // Verificar producto y stock con consulta preparada
+        // Verificar producto y stock
         $stmt = $conn->prepare("SELECT * FROM productos WHERE id = ?");
         $stmt->bind_param("i", $producto_id);
         $stmt->execute();
@@ -31,7 +30,7 @@ class Carrito {
         $stmt->close();
         
         if ($producto['stock_actual'] < $cantidad) {
-            return ['success' => false, 'message' => 'Stock insuficiente'];
+            return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
         }
         
         // Agregar al carrito en sesión
@@ -48,7 +47,7 @@ class Carrito {
         } else {
             $nueva_cantidad = $_SESSION['carrito'][$producto_id]['cantidad'] + $cantidad;
             if ($nueva_cantidad > $producto['stock_actual']) {
-                return ['success' => false, 'message' => 'Stock insuficiente'];
+                return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
             }
             $_SESSION['carrito'][$producto_id]['cantidad'] = $nueva_cantidad;
         }
@@ -71,6 +70,7 @@ class Carrito {
         
         if (isset($_SESSION['carrito'][$producto_id])) {
             $_SESSION['carrito'][$producto_id]['cantidad'] = $cantidad;
+            $_SESSION['carrito'][$producto_id]['subtotal'] = $cantidad * $_SESSION['carrito'][$producto_id]['precio'];
         }
         
         return $this->obtener();
@@ -96,12 +96,10 @@ class Carrito {
             $subtotal += $item['subtotal'];
         }
         
-        $total = $subtotal;
-        
         return [
             'items' => $carrito,
             'subtotal' => $subtotal,
-            'total' => $total
+            'total' => $subtotal
         ];
     }
     
@@ -111,11 +109,10 @@ class Carrito {
         return $this->obtener();
     }
     
-    // Procesar venta con consultas preparadas y validación mejorada
+    // Procesar venta
     public function procesarVenta($metodo_pago, $efectivo_recibido = null, $cambio = null) {
         global $conn;
         
-        // Validar método de pago
         $metodos_validos = ['Efectivo', 'Tarjeta', 'Transferencia'];
         if (!in_array($metodo_pago, $metodos_validos)) {
             return ['success' => false, 'message' => 'Método de pago inválido'];
@@ -139,74 +136,65 @@ class Carrito {
             if ($cambio === false || $cambio < 0) {
                 return ['success' => false, 'message' => 'Cambio inválido'];
             }
-        } else {
-            $efectivo_recibido = null;
-            $cambio = null;
         }
         
         $conn->begin_transaction();
         
         try {
-            // VALIDACIÓN DE STOCK CON CONSULTAS PREPARADAS
+            // Validar stock nuevamente
             foreach ($carrito['items'] as $item) {
-                $stmt_stock = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ? FOR UPDATE");
-                $stmt_stock->bind_param("i", $item['id']);
-                $stmt_stock->execute();
-                $result_stock = $stmt_stock->get_result();
-                $producto_db = $result_stock->fetch_assoc();
-                $stmt_stock->close();
+                $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ? FOR UPDATE");
+                $stmt->bind_param("i", $item['id']);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $producto = $result->fetch_assoc();
+                $stmt->close();
                 
-                if (!$producto_db) {
-                    throw new Exception("Producto no encontrado: {$item['nombre']}");
-                }
-                
-                if ($item['cantidad'] > $producto_db['stock_actual']) {
-                    throw new Exception("Stock insuficiente para: {$item['nombre']}. Disponible: {$producto_db['stock_actual']}");
+                if (!$producto || $item['cantidad'] > $producto['stock_actual']) {
+                    throw new Exception("Stock insuficiente para: {$item['nombre']}");
                 }
             }
             
-            // Crear venta con consulta preparada
+            // Crear venta
             $folio = generarFolio();
-            $subtotal = $carrito['subtotal'];
-            $total = $carrito['total'];
             
-            $stmt_venta = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt_venta->bind_param("sddsss", $folio, $subtotal, $total, $metodo_pago, $efectivo_recibido, $cambio);
-            $stmt_venta->execute();
+            $stmt = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("sddsss", $folio, $carrito['subtotal'], $carrito['total'], $metodo_pago, $efectivo_recibido, $cambio);
+            $stmt->execute();
             $venta_id = $conn->insert_id;
-            $stmt_venta->close();
+            $stmt->close();
             
             // Registrar detalles y actualizar inventario
             foreach ($carrito['items'] as $item) {
                 // Detalle de venta
-                $stmt_detalle = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)");
-                $stmt_detalle->bind_param("iiidd", $venta_id, $item['id'], $item['cantidad'], $item['precio'], $item['subtotal']);
-                $stmt_detalle->execute();
-                $stmt_detalle->close();
+                $stmt = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("iiidd", $venta_id, $item['id'], $item['cantidad'], $item['precio'], $item['subtotal']);
+                $stmt->execute();
+                $stmt->close();
                 
                 // Obtener stock anterior
-                $stmt_stock_anterior = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
-                $stmt_stock_anterior->bind_param("i", $item['id']);
-                $stmt_stock_anterior->execute();
-                $result = $stmt_stock_anterior->get_result();
+                $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
+                $stmt->bind_param("i", $item['id']);
+                $stmt->execute();
+                $result = $stmt->get_result();
                 $producto = $result->fetch_assoc();
                 $stock_anterior = $producto['stock_actual'];
-                $stmt_stock_anterior->close();
+                $stmt->close();
                 
                 $stock_nuevo = $stock_anterior - $item['cantidad'];
                 
                 // Actualizar stock
-                $stmt_update = $conn->prepare("UPDATE productos SET stock_actual = ? WHERE id = ?");
-                $stmt_update->bind_param("ii", $stock_nuevo, $item['id']);
-                $stmt_update->execute();
-                $stmt_update->close();
+                $stmt = $conn->prepare("UPDATE productos SET stock_actual = ? WHERE id = ?");
+                $stmt->bind_param("ii", $stock_nuevo, $item['id']);
+                $stmt->execute();
+                $stmt->close();
                 
                 // Registrar movimiento
                 $justificacion = "Venta #$folio";
-                $stmt_movimiento = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'salida', ?, ?, ?, ?)");
-                $stmt_movimiento->bind_param("iiiis", $item['id'], $item['cantidad'], $stock_anterior, $stock_nuevo, $justificacion);
-                $stmt_movimiento->execute();
-                $stmt_movimiento->close();
+                $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'salida', ?, ?, ?, ?)");
+                $stmt->bind_param("iiiss", $item['id'], $item['cantidad'], $stock_anterior, $stock_nuevo, $justificacion);
+                $stmt->execute();
+                $stmt->close();
             }
             
             $conn->commit();
@@ -217,70 +205,8 @@ class Carrito {
         } catch (Exception $e) {
             $conn->rollback();
             error_log("Error en venta: " . $e->getMessage());
-            return ['success' => false, 'message' => 'Error al procesar la venta'];
+            return ['success' => false, 'message' => 'Error al procesar la venta: ' . $e->getMessage()];
         }
-    }
-}
-
-// Manejar peticiones AJAX con validación de token CSRF (opcional pero recomendado)
-if (isset($_POST['accion'])) {
-    header('Content-Type: application/json');
-    
-    // Validación básica de origen
-    $origen = $_SERVER['HTTP_REFERER'] ?? '';
-    if (strpos($origen, $_SERVER['HTTP_HOST']) === false && $origen != '') {
-        echo json_encode(['success' => false, 'message' => 'Origen no válido']);
-        exit;
-    }
-    
-    $carrito = new Carrito();
-    
-    switch ($_POST['accion']) {
-        case 'agregar':
-            if (!isset($_POST['producto_id'])) {
-                echo json_encode(['success' => false, 'message' => 'ID de producto requerido']);
-                break;
-            }
-            $cantidad = isset($_POST['cantidad']) ? $_POST['cantidad'] : 1;
-            echo json_encode($carrito->agregar($_POST['producto_id'], $cantidad));
-            break;
-            
-        case 'modificar':
-            if (!isset($_POST['producto_id']) || !isset($_POST['cantidad'])) {
-                echo json_encode(['success' => false, 'message' => 'Datos incompletos']);
-                break;
-            }
-            echo json_encode($carrito->modificar($_POST['producto_id'], $_POST['cantidad']));
-            break;
-            
-        case 'eliminar':
-            if (!isset($_POST['producto_id'])) {
-                echo json_encode(['success' => false, 'message' => 'ID de producto requerido']);
-                break;
-            }
-            echo json_encode($carrito->eliminar($_POST['producto_id']));
-            break;
-            
-        case 'obtener':
-            echo json_encode($carrito->obtener());
-            break;
-            
-        case 'vaciar':
-            echo json_encode($carrito->vaciar());
-            break;
-            
-        case 'procesar':
-            if (!isset($_POST['metodo_pago'])) {
-                echo json_encode(['success' => false, 'message' => 'Método de pago requerido']);
-                break;
-            }
-            $efectivo_recibido = isset($_POST['efectivo_recibido']) ? floatval($_POST['efectivo_recibido']) : null;
-            $cambio = isset($_POST['cambio']) ? floatval($_POST['cambio']) : null;
-            echo json_encode($carrito->procesarVenta($_POST['metodo_pago'], $efectivo_recibido, $cambio));
-            break;
-            
-        default:
-            echo json_encode(['success' => false, 'message' => 'Acción no válida']);
     }
 }
 ?>

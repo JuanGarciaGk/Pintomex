@@ -1,8 +1,8 @@
 <?php
 // Configuración de la base de datos
 define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_USER', 'Garcia');
+define('DB_PASS', '157390');
 define('DB_NAME', 'pintumex_pos');
 
 // Crear conexión con manejo de errores mejorado
@@ -26,8 +26,7 @@ if (!isset($_SESSION['carrito'])) {
     $_SESSION['carrito'] = [];
 }
 
-// Función para sanitizar entrada (AHORA USAMOS PREPARED STATEMENTS EN LUGAR DE ESCAPE)
-// Esta función es solo para validación básica, NO para SQL
+// Función para sanitizar entrada
 function sanitize($data) {
     $data = trim($data);
     $data = stripslashes($data);
