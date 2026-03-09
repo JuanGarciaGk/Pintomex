@@ -216,5 +216,6 @@
     </style>
     
     <script src="js/script.js" async></script>
+    <script src="js/cierre_caja.js" async></script
 </body>
 </html>
