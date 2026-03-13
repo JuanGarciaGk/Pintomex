@@ -1,7 +1,7 @@
 <?php
 define('DB_HOST', 'localhost');
-define('DB_USER', 'Garcia');
-define('DB_PASS', '');
+define('DB_USER', 'root');
+define('DB_PASS', '157390');
 define('DB_NAME', 'pintumex_pos');
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
