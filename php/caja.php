@@ -15,13 +15,31 @@ class Caja {
             $stmt->close();
             
             if ($caja_abierta) {
-                // Obtener ventas del día que NO están asociadas a ningún corte (ventas del día actual)
-                $stmt = $conn->prepare("SELECT COUNT(*) as total_ventas, COALESCE(SUM(total), 0) as total_ingresos 
+                // Obtener ventas del día que pertenecen a la caja ABIERTA actual
+                $stmt = $conn->prepare("SELECT 
+                                            COUNT(*) as total_ventas,
+                                            COUNT(CASE WHEN metodo_pago = 'Efectivo' THEN 1 END) as ventas_efectivo,
+                                            COALESCE(SUM(CASE WHEN metodo_pago = 'Efectivo' THEN total ELSE 0 END), 0) as total_efectivo,
+                                            COALESCE(SUM(CASE WHEN metodo_pago != 'Efectivo' THEN total ELSE 0 END), 0) as total_electronico
                                         FROM ventas 
-                                        WHERE DATE(fecha) = CURDATE()");
+                                        WHERE DATE(fecha) = CURDATE() 
+                                        AND (corte_caja_id = ? OR corte_caja_id IS NULL)");
+                $stmt->bind_param("i", $caja_abierta['id']);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 $ventas_hoy = $result->fetch_assoc();
+                $stmt->close();
+                
+                // Obtener gastos del día
+                $stmt = $conn->prepare("SELECT COALESCE(SUM(monto), 0) as total_gastos 
+                                        FROM movimientos_caja 
+                                        WHERE corte_caja_id = ? 
+                                        AND tipo = 'egreso'");
+                $stmt->bind_param("i", $caja_abierta['id']);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $gastos_hoy = $result->fetch_assoc();
+                $total_gastos = floatval($gastos_hoy['total_gastos']);
                 $stmt->close();
                 
                 return [
@@ -29,7 +47,10 @@ class Caja {
                     'caja_abierta' => true,
                     'caja' => $caja_abierta,
                     'ventas_hoy' => intval($ventas_hoy['total_ventas']),
-                    'total_ventas_hoy' => floatval($ventas_hoy['total_ingresos'])
+                    'ventas_efectivo' => intval($ventas_hoy['ventas_efectivo']),
+                    'total_ventas_hoy' => floatval($ventas_hoy['total_efectivo']), // Solo efectivo para la caja física
+                    'total_electronico' => floatval($ventas_hoy['total_electronico']),
+                    'total_gastos' => $total_gastos
                 ];
             }
             
@@ -50,7 +71,7 @@ class Caja {
         try {
             $monto_inicial = filter_var($monto_inicial, FILTER_VALIDATE_FLOAT);
             
-            if (!$monto_inicial || $monto_inicial < 0) {
+            if ($monto_inicial === false || $monto_inicial < 0) {
                 return ['success' => false, 'message' => 'Monto inicial inválido'];
             }
             
@@ -97,7 +118,7 @@ class Caja {
         try {
             $monto_final = filter_var($monto_final, FILTER_VALIDATE_FLOAT);
             
-            if (!$monto_final || $monto_final < 0) {
+            if ($monto_final === false || $monto_final < 0) {
                 return ['success' => false, 'message' => 'Monto final inválido'];
             }
             
@@ -112,12 +133,20 @@ class Caja {
                 return ['success' => false, 'message' => 'No hay caja abierta'];
             }
             
-            // Obtener ventas del día (TODAS las ventas del día, no solo las no asignadas)
-            $stmt = $conn->prepare("SELECT COALESCE(SUM(total), 0) as total_ventas FROM ventas WHERE DATE(fecha) = CURDATE()");
+            // Obtener ventas del día que pertenecen a esta caja (NO asignadas o asignadas a esta caja)
+            // SOLO CONTAMOS EFECTIVO PARA LA CAJA FÍSICA
+            $stmt = $conn->prepare("SELECT 
+                                        COALESCE(SUM(CASE WHEN metodo_pago = 'Efectivo' THEN total ELSE 0 END), 0) as total_efectivo,
+                                        COALESCE(SUM(CASE WHEN metodo_pago != 'Efectivo' THEN total ELSE 0 END), 0) as total_electronico
+                                    FROM ventas 
+                                    WHERE DATE(fecha) = CURDATE() 
+                                    AND (corte_caja_id = ? OR corte_caja_id IS NULL)");
+            $stmt->bind_param("i", $caja['id']);
             $stmt->execute();
             $result = $stmt->get_result();
             $ventas = $result->fetch_assoc();
-            $total_ventas = floatval($ventas['total_ventas']);
+            $total_efectivo = floatval($ventas['total_efectivo']);
+            $total_electronico = floatval($ventas['total_electronico']);
             $stmt->close();
             
             // Obtener gastos del día
@@ -129,19 +158,19 @@ class Caja {
             $total_gastos = floatval($gastos['total_gastos']);
             $stmt->close();
             
-            // Calcular esperado vs real (considerando gastos)
-            $esperado = $caja['monto_inicial'] + $total_ventas - $total_gastos;
+            // Calcular esperado vs real (considerando efectivo y gastos)
+            $esperado = $caja['monto_inicial'] + $total_efectivo - $total_gastos;
             $diferencia = $monto_final - $esperado;
             
             $conn->begin_transaction();
             
-            // Actualizar ventas con este corte
-            $stmt = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE DATE(fecha) = CURDATE()");
+            // Actualizar ventas con este corte (solo las que son de hoy y no tienen corte asignado)
+            $stmt = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE DATE(fecha) = CURDATE() AND corte_caja_id IS NULL");
             $stmt->bind_param("i", $caja['id']);
             $stmt->execute();
             $stmt->close();
             
-            // Cerrar caja
+            // Cerrar caja - guardamos total_efectivo en total_ventas para mantener compatibilidad
             $stmt = $conn->prepare("UPDATE cortes_caja SET 
                                     fecha_cierre = NOW(), 
                                     monto_final = ?, 
@@ -150,7 +179,7 @@ class Caja {
                                     estado = 'cerrada',
                                     observaciones = ? 
                                     WHERE id = ?");
-            $stmt->bind_param("dddssi", $monto_final, $total_ventas, $diferencia, $observaciones, $caja['id']);
+            $stmt->bind_param("dddsi", $monto_final, $total_efectivo, $diferencia, $observaciones, $caja['id']);
             $stmt->execute();
             $stmt->close();
             
@@ -161,7 +190,8 @@ class Caja {
                 'message' => 'Caja cerrada exitosamente',
                 'datos' => [
                     'inicial' => floatval($caja['monto_inicial']),
-                    'ventas' => $total_ventas,
+                    'ventas_efectivo' => $total_efectivo,
+                    'ventas_electronico' => $total_electronico,
                     'gastos' => $total_gastos,
                     'esperado' => $esperado,
                     'final' => $monto_final,
@@ -208,7 +238,7 @@ class Caja {
             }
             
             $monto = filter_var($monto, FILTER_VALIDATE_FLOAT);
-            if (!$monto || $monto <= 0) {
+            if ($monto === false || $monto <= 0) {
                 return ['success' => false, 'message' => 'Monto inválido'];
             }
             
@@ -228,7 +258,8 @@ class Caja {
         
         try {
             $sql = "SELECT c.*, 
-                           (SELECT COUNT(*) FROM ventas WHERE corte_caja_id = c.id) as num_ventas 
+                           (SELECT COUNT(*) FROM ventas WHERE corte_caja_id = c.id) as num_ventas,
+                           (SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja WHERE corte_caja_id = c.id AND tipo = 'egreso') as total_gastos
                     FROM cortes_caja c 
                     ORDER BY c.fecha_apertura DESC";
             
@@ -251,7 +282,7 @@ class Caja {
         
         try {
             $corte_id = filter_var($corte_id, FILTER_VALIDATE_INT);
-            if (!$corte_id) {
+            if (!$corte_id || $corte_id <= 0) {
                 return ['success' => false, 'message' => 'ID inválido'];
             }
             

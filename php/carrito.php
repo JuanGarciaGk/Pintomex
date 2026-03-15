@@ -161,10 +161,10 @@ class Carrito {
             $caja_stmt->close();
 
             if ($caja_abierta) {
-                $update_venta = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE id = ?");
-                $update_venta->bind_param("ii", $caja_abierta['id'], $venta_id);
-                $update_venta->execute();
-                $update_venta->close();
+    $update_venta = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE id = ?");
+    $update_venta->bind_param("ii", $caja_abierta['id'], $venta_id);
+    $update_venta->execute();
+    $update_venta->close();
 }
             
             foreach ($carrito['items'] as $item) {

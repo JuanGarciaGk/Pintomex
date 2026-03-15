@@ -35,7 +35,10 @@ class ModuloCaja {
                 if (this.datosCaja) {
                     this.datosCaja.monto_inicial = parseFloat(this.datosCaja.monto_inicial) || 0;
                     this.datosCaja.total_ventas_hoy = parseFloat(data.total_ventas_hoy) || 0;
+                    this.datosCaja.total_electronico = parseFloat(data.total_electronico) || 0;
+                    this.datosCaja.total_gastos = parseFloat(data.total_gastos) || 0;
                     this.datosCaja.ventas_hoy = parseInt(data.ventas_hoy) || 0;
+                    this.datosCaja.ventas_efectivo = parseInt(data.ventas_efectivo) || 0;
                 }
                 
                 // Actualizar UI si el módulo está visible
@@ -92,9 +95,12 @@ class ModuloCaja {
     renderCajaAbierta() {
         // Asegurar que los valores sean números
         const montoInicial = this.datosCaja?.monto_inicial || 0;
-        const totalVentas = this.datosCaja?.total_ventas_hoy || 0;
+        const totalVentasEfectivo = this.datosCaja?.total_ventas_hoy || 0;
+        const totalElectronico = this.datosCaja?.total_electronico || 0;
+        const totalGastos = this.datosCaja?.total_gastos || 0;
         const ventasHoy = this.datosCaja?.ventas_hoy || 0;
-        const esperado = montoInicial + totalVentas;
+        const ventasEfectivo = this.datosCaja?.ventas_efectivo || 0;
+        const esperado = montoInicial + totalVentasEfectivo - totalGastos;
         const fechaApertura = this.datosCaja?.fecha_apertura ? new Date(this.datosCaja.fecha_apertura).toLocaleString() : '';
 
         return `
@@ -114,15 +120,27 @@ class ModuloCaja {
                     </div>
                     
                     <div class="resumen-card">
-                        <h3>Ventas del Día</h3>
-                        <div class="cantidad">$${totalVentas.toFixed(2)}</div>
-                        <div class="subtexto">${ventasHoy} transacciones</div>
+                        <h3>Ventas en Efectivo</h3>
+                        <div class="cantidad">$${totalVentasEfectivo.toFixed(2)}</div>
+                        <div class="subtexto">${ventasEfectivo} transacciones</div>
                     </div>
                     
                     <div class="resumen-card">
-                        <h3>Esperado en Caja</h3>
+                        <h3>Ventas Electrónicas</h3>
+                        <div class="cantidad">$${totalElectronico.toFixed(2)}</div>
+                        <div class="subtexto">Tarjeta/Transferencia</div>
+                    </div>
+                    
+                    <div class="resumen-card">
+                        <h3>Gastos del Día</h3>
+                        <div class="cantidad" style="color: #e67e22;">-$${totalGastos.toFixed(2)}</div>
+                        <div class="subtexto">Egresos registrados</div>
+                    </div>
+                    
+                    <div class="resumen-card">
+                        <h3>Total en Caja</h3>
                         <div class="cantidad">$${esperado.toFixed(2)}</div>
-                        <div class="subtexto">Inicial + Ventas</div>
+                        <div class="subtexto">Inicial + Efectivo - Gastos</div>
                     </div>
                 </div>
                 
@@ -219,8 +237,10 @@ class ModuloCaja {
 
     mostrarModalCierre() {
         const montoInicial = this.datosCaja?.monto_inicial || 0;
-        const totalVentas = this.datosCaja?.total_ventas_hoy || 0;
-        const esperado = montoInicial + totalVentas;
+        const totalVentasEfectivo = this.datosCaja?.total_ventas_hoy || 0;
+        const totalElectronico = this.datosCaja?.total_electronico || 0;
+        const totalGastos = this.datosCaja?.total_gastos || 0;
+        const esperado = montoInicial + totalVentasEfectivo - totalGastos;
         
         const modal = document.createElement('div');
         modal.className = 'modal';
@@ -239,17 +259,25 @@ class ModuloCaja {
                         <span>$${montoInicial.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span>Ventas del Día:</span>
-                        <span>$${totalVentas.toFixed(2)}</span>
+                        <span>Ventas en Efectivo:</span>
+                        <span>+$${totalVentasEfectivo.toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: #e67e22;">
+                        <span>Gastos del Día:</span>
+                        <span>-$${totalGastos.toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: #666;">
+                        <span>Ventas Electrónicas:</span>
+                        <span>$${totalElectronico.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-weight: bold; border-top: 2px dashed var(--light); padding-top: 0.5rem;">
-                        <span>Esperado:</span>
+                        <span>Esperado en Efectivo:</span>
                         <span>$${esperado.toFixed(2)}</span>
                     </div>
                 </div>
                 
                 <div class="form-group">
-                    <label>Monto Final en Caja</label>
+                    <label>Monto Final en Caja (Efectivo Físico)</label>
                     <input type="number" id="montoFinal" min="0" step="0.01" placeholder="0.00" autofocus>
                 </div>
                 
@@ -276,58 +304,60 @@ class ModuloCaja {
     }
 
     async procesarCierre() {
-    const montoFinal = document.getElementById('montoFinal')?.value;
-    const observaciones = document.getElementById('observacionesCierre')?.value || '';
+        const montoFinal = document.getElementById('montoFinal')?.value;
+        const observaciones = document.getElementById('observacionesCierre')?.value || '';
 
-    if (!montoFinal || parseFloat(montoFinal) < 0) {
-        window.pos.mostrarNotificacion('Ingrese un monto válido', 'warning');
-        return;
-    }
-
-    try {
-        const formData = new FormData();
-        formData.append('accion', 'cerrarCaja');
-        formData.append('monto_final', montoFinal);
-        formData.append('observaciones', observaciones);
-
-        const response = await fetch(this.apiUrl, {
-            method: 'POST',
-            body: formData
-        });
-        
-        // Verificar si la respuesta es JSON válido
-        const text = await response.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('Respuesta no JSON:', text);
-            window.pos.mostrarNotificacion('Error del servidor: ' + text.substring(0, 100), 'error');
+        if (!montoFinal || parseFloat(montoFinal) < 0) {
+            window.pos.mostrarNotificacion('Ingrese un monto válido', 'warning');
             return;
         }
-        
-        if (data.success) {
-            document.getElementById('modalCierreCaja')?.remove();
+
+        try {
+            const formData = new FormData();
+            formData.append('accion', 'cerrarCaja');
+            formData.append('monto_final', montoFinal);
+            formData.append('observaciones', observaciones);
+
+            const response = await fetch(this.apiUrl, {
+                method: 'POST',
+                body: formData
+            });
             
-            // Mostrar resultado del corte
-            this.mostrarResultadoCorte(data.datos);
+            // Verificar si la respuesta es JSON válido
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Respuesta no JSON:', text);
+                window.pos.mostrarNotificacion('Error del servidor: ' + text.substring(0, 100), 'error');
+                return;
+            }
             
-            window.pos.mostrarNotificacion('Caja cerrada exitosamente', 'success');
-            await this.verificarEstadoCaja();
-            this.actualizarUI();
-        } else {
-            window.pos.mostrarNotificacion(data.message || 'Error al cerrar caja', 'error');
+            if (data.success) {
+                document.getElementById('modalCierreCaja')?.remove();
+                
+                // Mostrar resultado del corte
+                this.mostrarResultadoCorte(data.datos);
+                
+                window.pos.mostrarNotificacion('Caja cerrada exitosamente', 'success');
+                await this.verificarEstadoCaja();
+                this.actualizarUI();
+            } else {
+                window.pos.mostrarNotificacion(data.message || 'Error al cerrar caja', 'error');
+            }
+        } catch (error) {
+            window.pos.mostrarNotificacion('Error al cerrar caja: ' + error.message, 'error');
+            console.error(error);
         }
-    } catch (error) {
-        window.pos.mostrarNotificacion('Error al cerrar caja: ' + error.message, 'error');
-        console.error(error);
     }
-}
 
     mostrarResultadoCorte(datos) {
         // Asegurar que los valores sean números
         const inicial = parseFloat(datos.inicial) || 0;
-        const ventas = parseFloat(datos.ventas) || 0;
+        const ventasEfectivo = parseFloat(datos.ventas_efectivo) || 0;
+        const ventasElectronico = parseFloat(datos.ventas_electronico) || 0;
+        const gastos = parseFloat(datos.gastos) || 0;
         const esperado = parseFloat(datos.esperado) || 0;
         const final = parseFloat(datos.final) || 0;
         const diferencia = parseFloat(datos.diferencia) || 0;
@@ -355,15 +385,23 @@ class ModuloCaja {
                         <span>$${inicial.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span>Ventas:</span>
-                        <span>$${ventas.toFixed(2)}</span>
+                        <span>Ventas Efectivo:</span>
+                        <span>+$${ventasEfectivo.toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: #666;">
+                        <span>Ventas Electrónicas:</span>
+                        <span>$${ventasElectronico.toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: #e67e22;">
+                        <span>Gastos:</span>
+                        <span>-$${gastos.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-weight: bold; border-top: 2px solid var(--light); padding-top: 0.5rem;">
-                        <span>Esperado:</span>
+                        <span>Esperado en Efectivo:</span>
                         <span>$${esperado.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span>Final:</span>
+                        <span>Final (Efectivo Físico):</span>
                         <span>$${final.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 1.3rem; font-weight: bold; margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--light);">
@@ -435,55 +473,55 @@ class ModuloCaja {
     }
 
     async procesarGasto() {
-    const concepto = document.getElementById('conceptoGasto')?.value;
-    const monto = document.getElementById('montoGasto')?.value;
-    const referencia = document.getElementById('referenciaGasto')?.value || '';
+        const concepto = document.getElementById('conceptoGasto')?.value;
+        const monto = document.getElementById('montoGasto')?.value;
+        const referencia = document.getElementById('referenciaGasto')?.value || '';
 
-    if (!concepto) {
-        window.pos.mostrarNotificacion('Ingrese un concepto', 'warning');
-        return;
-    }
-
-    if (!monto || parseFloat(monto) <= 0) {
-        window.pos.mostrarNotificacion('Ingrese un monto válido', 'warning');
-        return;
-    }
-
-    try {
-        const formData = new FormData();
-        formData.append('accion', 'agregarGasto');
-        formData.append('concepto', concepto);
-        formData.append('monto', monto);
-        formData.append('referencia', referencia);
-
-        const response = await fetch(this.apiUrl, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const text = await response.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('Respuesta no JSON:', text);
-            window.pos.mostrarNotificacion('Error del servidor: ' + text.substring(0, 100), 'error');
+        if (!concepto) {
+            window.pos.mostrarNotificacion('Ingrese un concepto', 'warning');
             return;
         }
-        
-        if (data.success) {
-            document.getElementById('modalGasto')?.remove();
-            window.pos.mostrarNotificacion('Gasto registrado', 'success');
-            await this.verificarEstadoCaja();
-            this.actualizarUI();
-        } else {
-            window.pos.mostrarNotificacion(data.message || 'Error al registrar gasto', 'error');
+
+        if (!monto || parseFloat(monto) <= 0) {
+            window.pos.mostrarNotificacion('Ingrese un monto válido', 'warning');
+            return;
         }
-    } catch (error) {
-        window.pos.mostrarNotificacion('Error al registrar gasto: ' + error.message, 'error');
-        console.error(error);
+
+        try {
+            const formData = new FormData();
+            formData.append('accion', 'agregarGasto');
+            formData.append('concepto', concepto);
+            formData.append('monto', monto);
+            formData.append('referencia', referencia);
+
+            const response = await fetch(this.apiUrl, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Respuesta no JSON:', text);
+                window.pos.mostrarNotificacion('Error del servidor: ' + text.substring(0, 100), 'error');
+                return;
+            }
+            
+            if (data.success) {
+                document.getElementById('modalGasto')?.remove();
+                window.pos.mostrarNotificacion('Gasto registrado', 'success');
+                await this.verificarEstadoCaja();
+                this.actualizarUI();
+            } else {
+                window.pos.mostrarNotificacion(data.message || 'Error al registrar gasto', 'error');
+            }
+        } catch (error) {
+            window.pos.mostrarNotificacion('Error al registrar gasto: ' + error.message, 'error');
+            console.error(error);
+        }
     }
-}
 
     async mostrarHistorial() {
         try {
@@ -510,7 +548,8 @@ class ModuloCaja {
                                 <th>Fecha Apertura</th>
                                 <th>Fecha Cierre</th>
                                 <th>Inicial</th>
-                                <th>Ventas</th>
+                                <th>Ventas Efectivo</th>
+                                <th>Gastos</th>
                                 <th>Final</th>
                                 <th>Diferencia</th>
                                 <th>Estado</th>
@@ -521,6 +560,7 @@ class ModuloCaja {
                             ${data.historial.map(corte => {
                                 const montoInicial = parseFloat(corte.monto_inicial) || 0;
                                 const totalVentas = parseFloat(corte.total_ventas || 0) || 0;
+                                const totalGastos = parseFloat(corte.total_gastos || 0) || 0;
                                 const montoFinal = parseFloat(corte.monto_final || 0) || 0;
                                 const diferencia = parseFloat(corte.diferencia || 0) || 0;
                                 
@@ -535,6 +575,7 @@ class ModuloCaja {
                                         <td>${fechaCierre}</td>
                                         <td>$${montoInicial.toFixed(2)}</td>
                                         <td>$${totalVentas.toFixed(2)}</td>
+                                        <td style="color: #e67e22;">$${totalGastos.toFixed(2)}</td>
                                         <td>$${montoFinal.toFixed(2)}</td>
                                         <td class="${claseDif}">$${diferencia.toFixed(2)}</td>
                                         <td>
@@ -647,6 +688,36 @@ class ModuloCaja {
                                     <td style="padding: 0.5rem; text-align: center;">${venta.folio}</td>
                                     <td style="padding: 0.5rem; text-align: center;">${venta.metodo_pago}</td>
                                     <td style="padding: 0.5rem; text-align: right;">$${parseFloat(venta.total).toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h4 style="margin: 1rem 0;">Movimientos de Caja</h4>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: var(--light);">
+                                <th style="padding: 0.5rem;">Tipo</th>
+                                <th style="padding: 0.5rem;">Concepto</th>
+                                <th style="padding: 0.5rem;">Monto</th>
+                                <th style="padding: 0.5rem;">Referencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.movimientos.map(mov => `
+                                <tr>
+                                    <td style="padding: 0.5rem; text-align: center;">
+                                        <span style="color: ${mov.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">
+                                            ${mov.tipo === 'ingreso' ? '💰 Ingreso' : '💸 Gasto'}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 0.5rem;">${mov.concepto}</td>
+                                    <td style="padding: 0.5rem; text-align: right; color: ${mov.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'};">
+                                        ${mov.tipo === 'ingreso' ? '+' : '-'}$${parseFloat(mov.monto).toFixed(2)}
+                                    </td>
+                                    <td style="padding: 0.5rem;">${mov.referencia || '-'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
