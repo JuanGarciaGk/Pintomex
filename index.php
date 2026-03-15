@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/fontawesome/css/all.min.css">
     <link rel="preload" href="css/estilo.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/estilo.css"></noscript>
+    <link rel="stylesheet" href="css/modulo-caja.css">
     <style>
         .escanner-input { position: relative; }
         #codigoBarras {
@@ -31,19 +32,23 @@
             
             <nav aria-label="Menú principal">
                 <ul class="menu">
-                    <li class="menu-item active">
+                    <li class="menu-item active" data-modulo="caja">
+                        <i class="fas fa-cash-register" aria-hidden="true"></i>
+                        <span>Caja</span>
+                    </li>
+                    <li class="menu-item" data-modulo="puntoventa">
                         <i class="fas fa-shopping-cart" aria-hidden="true"></i>
                         <span>Punto de Venta</span>
                     </li>
-                    <li class="menu-item">
+                    <li class="menu-item" data-modulo="productos">
                         <i class="fas fa-box" aria-hidden="true"></i>
                         <span>Productos</span>
                     </li>
-                    <li class="menu-item">
+                    <li class="menu-item" data-modulo="inventario">
                         <i class="fas fa-warehouse" aria-hidden="true"></i>
                         <span>Inventario</span>
                     </li>
-                    <li class="menu-item">
+                    <li class="menu-item" data-modulo="reportes">
                         <i class="fas fa-chart-bar" aria-hidden="true"></i>
                         <span>Reportes</span>
                     </li>
@@ -195,5 +200,6 @@
     </style>
     
     <script src="js/script.js" async></script>
+    <script src="js/modulo-caja.js"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@ class POSSystem {
         this.metodoPagoActivo = null;
         this.cargando = false;
         this.apiUrl = 'php/api.php';
+        this.verificandoCaja = false;
     }
 
     async init() {
@@ -15,6 +16,8 @@ class POSSystem {
         this.initResponsive();
         this.agregarRippleEffect();
         this.iniciarBuscadorPredictivo();
+        this.initModulos();
+        this.iniciarActualizacionAutomatica();
 
         setTimeout(() => {
             this.verificarConexionBD();
@@ -31,6 +34,83 @@ class POSSystem {
         setTimeout(() => {
             document.getElementById('codigoBarras')?.focus();
         }, 500);
+    }
+
+    iniciarActualizacionAutomatica() {
+        // Actualizar cada 30 segundos si estamos en módulo de caja
+        setInterval(() => {
+            const menuActivo = document.querySelector('.menu-item.active');
+            if (menuActivo && menuActivo.dataset.modulo === 'caja' && window.moduloCaja) {
+                window.moduloCaja.verificarEstadoCaja();
+            }
+        }, 30000);
+    }
+
+    async verificarCajaAntesDeVender() {
+        if (this.verificandoCaja) return false;
+        this.verificandoCaja = true;
+        
+        try {
+            const response = await fetch(this.apiUrl + '?accion=getEstadoCaja');
+            const data = await response.json();
+            
+            if (data.success) {
+                if (!data.caja_abierta) {
+                    this.mostrarNotificacion('Debe abrir la caja antes de realizar ventas', 'warning');
+                    
+                    // Cambiar automáticamente al módulo de caja
+                    document.querySelector('.menu-item[data-modulo="caja"]').click();
+                    return false;
+                }
+                
+                // Actualizar datos de caja en segundo plano
+                if (window.moduloCaja) {
+                    window.moduloCaja.datosCaja = {
+                        ...window.moduloCaja.datosCaja,
+                        total_ventas_hoy: data.total_ventas_hoy,
+                        ventas_hoy: data.ventas_hoy
+                    };
+                }
+                
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error verificando caja:', error);
+            return false;
+        } finally {
+            this.verificandoCaja = false;
+        }
+    }
+
+    initModulos() {
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const modulo = e.currentTarget.dataset.modulo;
+                
+                // Actualizar clase activa
+                document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                
+                // Ocultar todos los módulos
+                document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');
+                
+                // Mostrar módulo seleccionado
+                if (modulo === 'caja') {
+                    if (window.moduloCaja) {
+                        window.moduloCaja.mostrarModulo();
+                    }
+                } else if (modulo === 'puntoventa') {
+                    const posSection = document.querySelector('.escanner-section');
+                    if (posSection) {
+                        posSection.style.display = 'block';
+                        // Verificar caja al entrar a ventas
+                        this.verificarCajaAntesDeVender();
+                    }
+                }
+                // Aquí puedes agregar más módulos (productos, inventario, reportes)
+            });
+        });
     }
 
     async verificarConexionBD() {
@@ -99,6 +179,10 @@ class POSSystem {
     }
 
     async agregarAlCarrito(productoId, cantidad = 1) {
+        // Verificar si la caja está abierta
+        const cajaAbierta = await this.verificarCajaAntesDeVender();
+        if (!cajaAbierta) return;
+        
         if (this.cargando) return;
         this.cargando = true;
         
@@ -154,7 +238,7 @@ class POSSystem {
             
             const producto = await response.json();
             
-            if (producto) {
+            if (producto && producto.id) {
                 await this.agregarAlCarrito(producto.id, 1);
             } else {
                 await this.buscarSugerencias(termino);
@@ -193,10 +277,10 @@ class POSSystem {
             sugerenciasDiv.innerHTML = productos.slice(0, 8).map(producto => `
                 <div class="sugerencia-item" data-id="${producto.id}">
                     <div class="sugerencia-info">
-                        <div class="sugerencia-nombre">${producto.nombre}</div>
+                        <div class="sugerencia-nombre">${this.escapeHTML(producto.nombre)}</div>
                         <div class="sugerencia-descripcion">
-                            <span class="sugerencia-codigo">${producto.codigo_barras}</span>
-                            <span>${producto.descripcion || ''}</span>
+                            <span class="sugerencia-codigo">${this.escapeHTML(producto.codigo_barras)}</span>
+                            <span>${this.escapeHTML(producto.descripcion || '')}</span>
                         </div>
                         <div class="sugerencia-stock ${producto.stock_actual <= producto.stock_minimo ? 'stock-bajo-sugerencia' : ''}">
                             <i class="fas fa-box"></i> Stock: ${producto.stock_actual}
@@ -220,6 +304,13 @@ class POSSystem {
         } catch (error) {
             console.error('Error en sugerencias:', error);
         }
+    }
+
+    escapeHTML(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     async actualizarCarrito() {
@@ -318,6 +409,10 @@ class POSSystem {
     }
 
     async procesarVenta() {
+        // Verificar si la caja está abierta
+        const cajaAbierta = await this.verificarCajaAntesDeVender();
+        if (!cajaAbierta) return;
+        
         if (this.carrito.length === 0) {
             this.mostrarNotificacion('El carrito está vacío', 'warning');
             return;
@@ -403,6 +498,14 @@ class POSSystem {
                 if (document.getElementById('efectivoRecibido')) {
                     document.getElementById('efectivoRecibido').value = '';
                 }
+                
+                // Actualizar módulo de caja si está visible
+                if (window.moduloCaja) {
+                    window.moduloCaja.verificarEstadoCaja();
+                    if (document.querySelector('.menu-item.active')?.dataset.modulo === 'caja') {
+                        window.moduloCaja.actualizarUI();
+                    }
+                }
             } else {
                 this.mostrarNotificacion(data.message || 'Error al procesar venta', 'error');
             }
@@ -425,12 +528,12 @@ class POSSystem {
         
         grid.innerHTML = productos.map(producto => `
             <div class="producto-card" data-id="${producto.id}">
-                <h3>${producto.nombre}</h3>
+                <h3>${this.escapeHTML(producto.nombre)}</h3>
                 <div class="precio">$${parseFloat(producto.precio_venta).toFixed(2)}</div>
                 <div class="stock ${producto.stock_actual <= producto.stock_minimo ? 'stock-bajo' : ''}">
                     <i class="fas fa-box"></i> ${producto.stock_actual} disponibles
                 </div>
-                <small>${producto.descripcion || ''}</small>
+                <small>${this.escapeHTML(producto.descripcion || '')}</small>
             </div>
         `).join('');
         
@@ -457,15 +560,15 @@ class POSSystem {
             container.innerHTML = data.items.map(item => `
                 <div class="carrito-item">
                     <div class="item-info">
-                        <h4>${item.nombre}</h4>
-                        <p>${item.descripcion || ''}</p>
+                        <h4>${this.escapeHTML(item.nombre)}</h4>
+                        <p>${this.escapeHTML(item.descripcion || '')}</p>
                         <div class="cantidad-control">
-                            <button onclick="pos.modificarCantidad(${item.id}, ${item.cantidad - 1})">
+                            <button onclick="pos.modificarCantidad(${item.id}, ${item.cantidad - 1})" ${item.cantidad <= 1 ? 'disabled' : ''}>
                                 <i class="fas fa-minus"></i>
                             </button>
                             <input type="number" value="${item.cantidad}" min="1" max="${item.stock}" 
                                    onchange="pos.modificarCantidad(${item.id}, parseInt(this.value) || 1)">
-                            <button onclick="pos.modificarCantidad(${item.id}, ${item.cantidad + 1})">
+                            <button onclick="pos.modificarCantidad(${item.id}, ${item.cantidad + 1})" ${item.cantidad >= item.stock ? 'disabled' : ''}>
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
@@ -739,7 +842,7 @@ class POSSystem {
         
         const itemsHTML = venta.items.map(item => `
             <div class="ticket-item">
-                <span>${item.cantidad}x ${item.nombre}</span>
+                <span>${item.cantidad}x ${this.escapeHTML(item.nombre)}</span>
                 <span>$${parseFloat(item.subtotal).toFixed(2)}</span>
             </div>
         `).join('');
@@ -847,3 +950,11 @@ if (document.readyState === 'loading') {
     window.pos = new POSSystem();
     window.pos.init();
 }
+
+// Asegurar que el módulo de caja se muestre al inicio
+setTimeout(() => {
+    const menuActivo = document.querySelector('.menu-item.active');
+    if (menuActivo && menuActivo.dataset.modulo === 'caja' && window.moduloCaja) {
+        window.moduloCaja.mostrarModulo();
+    }
+}, 600);

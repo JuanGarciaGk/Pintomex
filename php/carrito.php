@@ -153,6 +153,20 @@ class Carrito {
             $venta_id = $conn->insert_id;
             $stmt->close();
             
+            // Verificar si hay caja abierta y asociar la venta
+            $caja_stmt = $conn->prepare("SELECT id FROM cortes_caja WHERE estado = 'abierta' ORDER BY fecha_apertura DESC LIMIT 1");
+            $caja_stmt->execute();
+            $caja_result = $caja_stmt->get_result();
+            $caja_abierta = $caja_result->fetch_assoc();
+            $caja_stmt->close();
+
+            if ($caja_abierta) {
+                $update_venta = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE id = ?");
+                $update_venta->bind_param("ii", $caja_abierta['id'], $venta_id);
+                $update_venta->execute();
+                $update_venta->close();
+}
+            
             foreach ($carrito['items'] as $item) {
                 $stmt = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)");
                 $stmt->bind_param("iiidd", $venta_id, $item['id'], $item['cantidad'], $item['precio'], $item['subtotal']);

@@ -33,6 +33,7 @@ CREATE TABLE ventas (
     metodo_pago ENUM('Efectivo', 'Tarjeta', 'Transferencia') NOT NULL,
     efectivo_recibido DECIMAL(10,2) NULL,
     cambio DECIMAL(10,2) NULL,
+    corte_caja_id INT NULL,
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -58,6 +59,36 @@ CREATE TABLE movimientos_inventario (
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (producto_id) REFERENCES productos(id)
 );
+
+-- Tabla para apertura/cierre de caja
+CREATE TABLE cortes_caja (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    fecha_apertura DATETIME NOT NULL,
+    fecha_cierre DATETIME NULL,
+    monto_inicial DECIMAL(10,2) NOT NULL,
+    monto_final DECIMAL(10,2) NULL,
+    total_ventas DECIMAL(10,2) NULL,
+    diferencia DECIMAL(10,2) NULL,
+    estado ENUM('abierta', 'cerrada') DEFAULT 'abierta',
+    observaciones TEXT,
+    usuario VARCHAR(100) DEFAULT 'Administrador',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla para movimientos de caja (gastos, retiros, etc)
+CREATE TABLE movimientos_caja (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    corte_caja_id INT NOT NULL,
+    tipo ENUM('ingreso', 'egreso') NOT NULL,
+    concepto VARCHAR(255) NOT NULL,
+    monto DECIMAL(10,2) NOT NULL,
+    referencia VARCHAR(100),
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
+);
+
+-- Agregar foreign key a ventas
+ALTER TABLE ventas ADD FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id);
 
 INSERT INTO productos (codigo_barras, nombre, descripcion, categoria, marca, precio_compra, precio_venta, stock_minimo, stock_actual) VALUES
 ('7501357071482', 'Pintura Blanca Mate', 'Blanco, 19L', 'Acrílicas', 'Comex', 350.50, 450.50, 5, 20),

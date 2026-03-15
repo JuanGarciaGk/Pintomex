@@ -1,0 +1,220 @@
+/* Estilos para el módulo de caja */
+.modulo-caja {
+    padding: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.caja-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.caja-header h2 {
+    color: var(--primary);
+    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.caja-header h2 i {
+    color: var(--secondary);
+}
+
+.estado-caja {
+    padding: 0.8rem 1.5rem;
+    border-radius: 40px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.estado-caja.abierta {
+    background: rgba(39, 174, 96, 0.15);
+    color: var(--success);
+    border: 2px solid var(--success);
+}
+
+.estado-caja.cerrada {
+    background: rgba(197, 48, 48, 0.15);
+    color: var(--danger);
+    border: 2px solid var(--danger);
+}
+
+.caja-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.resumen-card {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    border: 2px solid var(--light);
+    transition: all 0.3s;
+}
+
+.resumen-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+    border-color: var(--secondary);
+}
+
+.resumen-card h3 {
+    color: var(--gray);
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 1rem;
+}
+
+.resumen-card .cantidad {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.resumen-card .subtexto {
+    color: var(--gray);
+    font-size: 0.9rem;
+}
+
+.caja-acciones {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.accion-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    border: 2px solid var(--light);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.accion-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--secondary);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+}
+
+.accion-card i {
+    font-size: 3rem;
+    color: var(--secondary);
+    margin-bottom: 1rem;
+}
+
+.accion-card h4 {
+    font-size: 1.3rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.accion-card p {
+    color: var(--gray);
+    font-size: 0.95rem;
+}
+
+.modal-caja {
+    max-width: 500px;
+}
+
+.modal-caja .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.modal-caja label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.modal-caja input,
+.modal-caja textarea {
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 2px solid var(--light);
+    border-radius: 12px;
+    font-size: 1.1rem;
+    transition: all 0.3s;
+}
+
+.modal-caja input:focus,
+.modal-caja textarea:focus {
+    outline: 3px solid rgba(230, 126, 34, 0.4);
+    outline-offset: 2px;
+    border-color: var(--secondary);
+}
+
+.diferencia-positiva {
+    color: var(--success);
+    font-weight: bold;
+}
+
+.diferencia-negativa {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+.diferencia-cero {
+    color: var(--gray);
+    font-weight: bold;
+}
+
+.tabla-historial {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+}
+
+.tabla-historial th {
+    background: var(--primary);
+    color: white;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+}
+
+.tabla-historial td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--light);
+}
+
+.tabla-historial tr:hover {
+    background: rgba(230, 126, 34, 0.05);
+}
+
+.btn-detalle {
+    background: var(--secondary);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-detalle:hover {
+    background: var(--secondary-dark);
+    transform: translateY(-2px);
+}
