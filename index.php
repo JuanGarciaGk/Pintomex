@@ -19,28 +19,6 @@
             border-color: #e67e22;
             box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.4);
         }
-        .escanner-input::after {
-            content: '\f02a';
-            font-family: 'Font Awesome 6 Free';
-            font-weight: 900;
-            position: absolute;
-            right: 130px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #e67e22;
-            font-size: 1.2rem;
-            opacity: 0.9;
-            pointer-events: none;
-            animation: parpadeo 1.5s infinite;
-        }
-        @keyframes parpadeo {
-            0% { opacity: 0.9; }
-            50% { opacity: 0.5; }
-            100% { opacity: 0.9; }
-        }
-        @media (max-width: 768px) {
-            .escanner-input::after { right: 15px; }
-        }
     </style>
 </head>
 <body>
