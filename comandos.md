@@ -20,3 +20,5 @@ git marge origin master   (para descargar los cambios de la rama actualizada)
 para salir se utiliza ":qw"
 
 git status  (para ver si esta actulizada la rama)
+
+DROP DATABASE pintumex_pos;

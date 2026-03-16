@@ -1,22 +1,23 @@
-/* Estilos para el módulo de caja */
+/* Estilos responsivos para el módulo de caja */
 .modulo-caja {
-    padding: 1.5rem;
-    max-width: 1200px;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    max-width: 1400px;
     margin: 0 auto;
+    width: 100%;
 }
 
 .caja-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: clamp(1rem, 3vw, 2rem);
     flex-wrap: wrap;
     gap: 1rem;
 }
 
 .caja-header h2 {
     color: var(--primary);
-    font-size: 2rem;
+    font-size: clamp(1.5rem, 5vw, 2rem);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -24,197 +25,271 @@
 
 .caja-header h2 i {
     color: var(--secondary);
+    font-size: clamp(1.2rem, 4vw, 1.8rem);
 }
 
 .estado-caja {
-    padding: 0.8rem 1.5rem;
+    padding: 0.6rem 1.2rem;
     border-radius: 40px;
     font-weight: bold;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
+    white-space: nowrap;
 }
 
-.estado-caja.abierta {
-    background: rgba(39, 174, 96, 0.15);
-    color: var(--success);
-    border: 2px solid var(--success);
-}
-
-.estado-caja.cerrada {
-    background: rgba(197, 48, 48, 0.15);
-    color: var(--danger);
-    border: 2px solid var(--danger);
-}
-
+/* Grid responsivo para resumen */
 .caja-resumen {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+    gap: clamp(1rem, 2vw, 1.5rem);
+    margin-bottom: clamp(1.5rem, 4vw, 2rem);
 }
 
 .resumen-card {
     background: white;
-    border-radius: 20px;
-    padding: 1.5rem;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    border-radius: var(--radius-lg);
+    padding: clamp(1rem, 3vw, 1.5rem);
+    box-shadow: var(--shadow-md);
     border: 2px solid var(--light);
-    transition: all 0.3s;
+    transition: all 0.3s ease;
 }
 
 .resumen-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-lg);
     border-color: var(--secondary);
 }
 
 .resumen-card h3 {
     color: var(--gray);
-    font-size: 1rem;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 1rem;
+    margin-bottom: 0.8rem;
 }
 
 .resumen-card .cantidad {
-    font-size: 2.5rem;
+    font-size: clamp(1.8rem, 5vw, 2.5rem);
     font-weight: bold;
     color: var(--primary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.3rem;
+    word-break: break-word;
 }
 
 .resumen-card .subtexto {
     color: var(--gray);
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 2.2vw, 0.9rem);
 }
 
+/* Acciones responsivas */
 .caja-acciones {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    gap: clamp(1rem, 2vw, 1.5rem);
+    margin-bottom: clamp(1.5rem, 4vw, 2rem);
 }
 
 .accion-card {
     background: white;
-    border-radius: 20px;
-    padding: 2rem;
+    border-radius: var(--radius-lg);
+    padding: clamp(1.2rem, 4vw, 2rem);
     text-align: center;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    box-shadow: var(--shadow-md);
     border: 2px solid var(--light);
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .accion-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-4px) scale(1.02);
     border-color: var(--secondary);
-    box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-lg);
 }
 
 .accion-card i {
-    font-size: 3rem;
+    font-size: clamp(2rem, 6vw, 3rem);
     color: var(--secondary);
-    margin-bottom: 1rem;
+    margin-bottom: 0.8rem;
 }
 
 .accion-card h4 {
-    font-size: 1.3rem;
+    font-size: clamp(1.1rem, 4vw, 1.3rem);
     color: var(--primary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.3rem;
 }
 
 .accion-card p {
     color: var(--gray);
-    font-size: 0.95rem;
+    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
 }
 
+/* Modal responsivo */
 .modal-caja {
-    max-width: 500px;
+    max-width: min(500px, 95%);
 }
 
 .modal-caja .form-group {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.2rem;
 }
 
 .modal-caja label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     color: var(--primary);
     font-weight: 600;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
 }
 
 .modal-caja input,
 .modal-caja textarea {
     width: 100%;
-    padding: 0.9rem 1rem;
+    padding: 0.8rem 1rem;
     border: 2px solid var(--light);
-    border-radius: 12px;
-    font-size: 1.1rem;
-    transition: all 0.3s;
+    border-radius: var(--radius-md);
+    font-size: clamp(1rem, 3vw, 1.1rem);
+    transition: all 0.3s ease;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
-.modal-caja input:focus,
-.modal-caja textarea:focus {
-    outline: 3px solid rgba(230, 126, 34, 0.4);
-    outline-offset: 2px;
-    border-color: var(--secondary);
-}
-
-.diferencia-positiva {
-    color: var(--success);
-    font-weight: bold;
-}
-
-.diferencia-negativa {
-    color: var(--danger);
-    font-weight: bold;
-}
-
-.diferencia-cero {
-    color: var(--gray);
-    font-weight: bold;
-}
-
+/* Tabla responsiva */
 .tabla-historial {
     width: 100%;
     border-collapse: collapse;
     background: white;
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    box-shadow: var(--shadow-md);
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1rem;
+}
+
+.tabla-historial thead {
+    background: var(--primary);
+    color: white;
 }
 
 .tabla-historial th {
-    background: var(--primary);
-    color: white;
-    padding: 1rem;
+    padding: clamp(0.8rem, 2vw, 1rem);
     text-align: left;
     font-weight: 600;
+    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+    white-space: nowrap;
 }
 
 .tabla-historial td {
-    padding: 1rem;
+    padding: clamp(0.8rem, 2vw, 1rem);
     border-bottom: 1px solid var(--light);
+    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+    white-space: nowrap;
 }
 
-.tabla-historial tr:hover {
-    background: rgba(230, 126, 34, 0.05);
+/* Colores responsivos */
+.diferencia-positiva { color: var(--success); }
+.diferencia-negativa { color: var(--danger); }
+.diferencia-cero { color: var(--gray); }
+
+/* Media queries específicos */
+@media (max-width: 768px) {
+    .caja-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .estado-caja {
+        align-self: flex-start;
+    }
+    
+    .caja-resumen {
+        grid-template-columns: 1fr;
+    }
+    
+    .caja-acciones {
+        grid-template-columns: 1fr;
+    }
+    
+    .accion-card {
+        min-height: 120px;
+        flex-direction: row;
+        text-align: left;
+        padding: 1rem;
+    }
+    
+    .accion-card i {
+        margin-bottom: 0;
+        margin-right: 1rem;
+        font-size: 2rem;
+    }
+    
+    .accion-card h4 {
+        margin-bottom: 0.1rem;
+    }
 }
 
-.btn-detalle {
-    background: var(--secondary);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s;
+@media (max-width: 576px) {
+    .caja-header h2 {
+        font-size: 1.5rem;
+    }
+    
+    .estado-caja {
+        font-size: 0.9rem;
+        padding: 0.4rem 1rem;
+    }
+    
+    .resumen-card .cantidad {
+        font-size: 2rem;
+    }
+    
+    .accion-card {
+        padding: 0.8rem;
+    }
+    
+    .accion-card i {
+        font-size: 1.8rem;
+    }
+    
+    .accion-card h4 {
+        font-size: 1.1rem;
+    }
+    
+    .accion-card p {
+        font-size: 0.85rem;
+    }
+    
+    .modal-caja input,
+    .modal-caja textarea {
+        padding: 0.7rem;
+        font-size: 1rem;
+    }
 }
 
-.btn-detalle:hover {
-    background: var(--secondary-dark);
-    transform: translateY(-2px);
+/* Orientación horizontal */
+@media (max-width: 768px) and (orientation: landscape) {
+    .caja-resumen {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .caja-acciones {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .accion-card {
+        flex-direction: column;
+        text-align: center;
+        min-height: 140px;
+    }
+    
+    .accion-card i {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
 }
