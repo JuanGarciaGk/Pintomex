@@ -10,6 +10,9 @@ class POSSystem {
         this.debounceTimer = null;
         this.cache = new Map();
         this.metrics = {};
+        this.scannerBuffer = '';
+        this.scannerTimeout = null;
+        this.scannerActive = true;
     }
 
     async init() {
@@ -25,6 +28,7 @@ class POSSystem {
         this.iniciarActualizacionAutomatica();
         this.configurarAtajosTeclado();
         this.initPerformanceOptimizations();
+        this.initScanner();
 
         await Promise.all([
             this.verificarConexionBD(),
@@ -74,6 +78,103 @@ class POSSystem {
         }
 
         this.cache = new Map();
+    }
+
+    initScanner() {
+        let lastKeyTime = 0;
+        
+        document.addEventListener('keypress', (e) => {
+            if (!this.scannerActive) return;
+            
+            const now = Date.now();
+            const timeDiff = now - lastKeyTime;
+            
+            if (timeDiff > 100 && this.scannerBuffer.length > 0) {
+                this.scannerBuffer = '';
+            }
+            
+            lastKeyTime = now;
+            
+            if (e.key.length === 1 && (e.key.match(/[a-zA-Z0-9]/) || e.key === '-')) {
+                this.scannerBuffer += e.key;
+                
+                if (this.scannerTimeout) clearTimeout(this.scannerTimeout);
+                
+                this.scannerTimeout = setTimeout(async () => {
+                    if (this.scannerBuffer.length >= 4) {
+                        await this.buscarPorCodigoEscanner(this.scannerBuffer);
+                    }
+                    this.scannerBuffer = '';
+                }, 100);
+            }
+            
+            if (e.key === 'Enter' && this.scannerBuffer.length > 0) {
+                e.preventDefault();
+                if (this.scannerTimeout) clearTimeout(this.scannerTimeout);
+                this.buscarPorCodigoEscanner(this.scannerBuffer);
+                this.scannerBuffer = '';
+            }
+        });
+    }
+
+    async buscarPorCodigoEscanner(codigo) {
+        if (!codigo || this.cargando) return;
+        
+        const inputBusqueda = document.getElementById('codigoBarras');
+        if (inputBusqueda) {
+            inputBusqueda.value = codigo;
+        }
+        
+        try {
+            const response = await fetch(this.apiUrl + '?accion=buscarPorCodigo&codigo=' + encodeURIComponent(codigo));
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const producto = await response.json();
+            
+            if (producto && producto.id) {
+                await this.agregarAlCarrito(producto.id, 1);
+                if (inputBusqueda) {
+                    inputBusqueda.value = '';
+                    inputBusqueda.focus();
+                }
+                this.agregarEfectoFeedback('success');
+            } else {
+                this.mostrarNotificacion('❌ Producto no encontrado: ' + codigo, 'warning');
+                if (inputBusqueda) {
+                    inputBusqueda.classList.add('error');
+                    setTimeout(() => inputBusqueda.classList.remove('error'), 500);
+                }
+                this.agregarEfectoFeedback('error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            this.mostrarNotificacion('Error en la búsqueda: ' + error.message, 'error');
+        }
+    }
+
+    agregarEfectoFeedback(tipo) {
+        const feedback = document.createElement('div');
+        feedback.className = `scanner-feedback scanner-${tipo}`;
+        feedback.innerHTML = tipo === 'success' ? 
+            '<i class="fas fa-check-circle"></i> Producto agregado' : 
+            '<i class="fas fa-times-circle"></i> Producto no encontrado';
+        
+        document.body.appendChild(feedback);
+        
+        setTimeout(() => {
+            feedback.classList.add('show');
+            setTimeout(() => {
+                feedback.classList.remove('show');
+                setTimeout(() => {
+                    if (document.body.contains(feedback)) {
+                        document.body.removeChild(feedback);
+                    }
+                }, 300);
+            }, 1500);
+        }, 10);
     }
 
     async cachedFetch(url, options = {}, ttl = 30000) {
@@ -528,8 +629,30 @@ class POSSystem {
             }
             
             const data = await response.json();
+            
+            if (data.success === false && data.message && data.message.includes('Stock insuficiente')) {
+                this.mostrarNotificacion(`❌ ${data.message}`, 'error');
+                
+                const maxStock = data.max_stock || 0;
+                const itemEnCarrito = this.carrito.find(item => item.id === productoId);
+                if (itemEnCarrito) {
+                    const input = document.querySelector(`.carrito-item [onchange*="${productoId}"]`);
+                    if (input) {
+                        input.value = itemEnCarrito.cantidad;
+                    }
+                }
+                
+                this.cargando = false;
+                return;
+            }
+            
             this.carrito = data.items;
             this.renderizarCarrito(data);
+            
+            const item = this.carrito.find(i => i.id === productoId);
+            if (item) {
+                this.mostrarNotificacion(`Cantidad actualizada: ${item.cantidad}`, 'success');
+            }
         } catch (error) {
             console.error('Error:', error);
             this.mostrarNotificacion('Error al modificar: ' + error.message, 'error');
@@ -718,15 +841,24 @@ class POSSystem {
                 const venta = {
                     folio: data.folio,
                     fecha: new Date().toLocaleString(),
-                    items: [...this.carrito],
-                    subtotal: total,
-                    total: total,
-                    metodo_pago: this.metodoPagoActivo,
-                    efectivo_recibido: efectivoRecibido,
-                    cambio: cambio
-                };
+                    items: this.carrito.map(item => ({
+                    nombre: item.nombre,
+                    cantidad: item.cantidad,
+                    precio: parseFloat(item.precio), // Asegurar que sea número
+                    subtotal: parseFloat(item.subtotal) // Asegurar que sea número
+                })),
+        subtotal: parseFloat(total),
+        total: parseFloat(total),
+        metodo_pago: this.metodoPagoActivo,
+        efectivo_recibido: efectivoRecibido ? parseFloat(efectivoRecibido) : null,
+        cambio: cambio ? parseFloat(cambio) : null
+    };
                 
-                this.mostrarTicket(venta);
+                if (window.ticketPrinter) {
+                    await window.ticketPrinter.printTicket(venta, true);
+                } else {
+                    this.mostrarTicket(venta);
+                }
                 
                 if (this.metodoPagoActivo === 'Efectivo') {
                     if (cambio > 0) {

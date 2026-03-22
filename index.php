@@ -199,6 +199,7 @@
         }
     </style>
     
+    <script src="js/ticket-printer.js"></script>
     <script src="js/script.js" async></script>
     <script src="js/modulo-caja.js"></script>
 </body>

@@ -53,6 +53,8 @@ class Carrito {
     }
     
     public function modificar($producto_id, $cantidad) {
+        global $conn;
+        
         $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
         $cantidad = filter_var($cantidad, FILTER_VALIDATE_INT);
         
@@ -65,6 +67,22 @@ class Carrito {
         }
         
         if (isset($_SESSION['carrito'][$producto_id])) {
+            // Obtener stock actual del producto
+            $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
+            $stmt->bind_param("i", $producto_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $producto = $result->fetch_assoc();
+            $stmt->close();
+            
+            if ($producto && $cantidad > $producto['stock_actual']) {
+                return [
+                    'success' => false, 
+                    'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual'],
+                    'max_stock' => $producto['stock_actual']
+                ];
+            }
+            
             $_SESSION['carrito'][$producto_id]['cantidad'] = $cantidad;
             $_SESSION['carrito'][$producto_id]['subtotal'] = $cantidad * $_SESSION['carrito'][$producto_id]['precio'];
         }
@@ -161,11 +179,11 @@ class Carrito {
             $caja_stmt->close();
 
             if ($caja_abierta) {
-    $update_venta = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE id = ?");
-    $update_venta->bind_param("ii", $caja_abierta['id'], $venta_id);
-    $update_venta->execute();
-    $update_venta->close();
-}
+                $update_venta = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE id = ?");
+                $update_venta->bind_param("ii", $caja_abierta['id'], $venta_id);
+                $update_venta->execute();
+                $update_venta->close();
+            }
             
             foreach ($carrito['items'] as $item) {
                 $stmt = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)");
