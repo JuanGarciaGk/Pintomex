@@ -6,6 +6,8 @@ class Productos {
     public function buscarPorCodigo($codigo) {
         global $conn;
         
+        $codigo = substr($codigo, 0, 50);
+        
         $stmt = $conn->prepare("SELECT * FROM productos WHERE codigo_barras = ?");
         $stmt->bind_param("s", $codigo);
         $stmt->execute();
@@ -22,6 +24,9 @@ class Productos {
     
     public function buscar($termino) {
         global $conn;
+        
+        $termino = substr($termino, 0, 100);
+        $termino = preg_replace('/[^a-zA-Z0-9áéíóúñÑ\s\-]/u', '', $termino);
         
         $termino_like = "%$termino%";
         
@@ -44,6 +49,15 @@ class Productos {
     
     public function porCategoria($categoria) {
         global $conn;
+        
+        $categorias_validas = [
+            'Todas', 'Acrílicas', 'Esmaltes', 'Selladores', 
+            'Barniz', 'Aerosol', 'Impermeabilizante', 'Complementos'
+        ];
+        
+        if (!in_array($categoria, $categorias_validas)) {
+            $categoria = 'Todas';
+        }
         
         if ($categoria === 'Todas') {
             $stmt = $conn->prepare("SELECT * FROM productos ORDER BY nombre");

@@ -7,11 +7,22 @@ class Carrito {
     public function agregar($producto_id, $cantidad = 1) {
         global $conn;
         
+        // Validaciones más estrictas
         $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
         $cantidad = filter_var($cantidad, FILTER_VALIDATE_INT);
         
-        if (!$producto_id || $producto_id <= 0 || !$cantidad || $cantidad <= 0) {
-            return ['success' => false, 'message' => 'Datos inválidos'];
+        if (!$producto_id || $producto_id <= 0) {
+            return ['success' => false, 'message' => 'ID de producto inválido'];
+        }
+        
+        if (!$cantidad || $cantidad <= 0) {
+            return ['success' => false, 'message' => 'Cantidad inválida'];
+        }
+        
+        // Límite máximo de cantidad por producto
+        $MAX_CANTIDAD = 999;
+        if ($cantidad > $MAX_CANTIDAD) {
+            return ['success' => false, 'message' => "Cantidad máxima permitida es $MAX_CANTIDAD"];
         }
         
         $stmt = $conn->prepare("SELECT * FROM productos WHERE id = ?");
@@ -27,8 +38,14 @@ class Carrito {
         $producto = $result->fetch_assoc();
         $stmt->close();
         
+        // Verificar stock
         if ($producto['stock_actual'] < $cantidad) {
             return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
+        }
+        
+        // Verificar límite por carrito (máximo 50 productos diferentes)
+        if (isset($_SESSION['carrito']) && count($_SESSION['carrito']) >= 50 && !isset($_SESSION['carrito'][$producto_id])) {
+            return ['success' => false, 'message' => 'Máximo 50 productos diferentes por venta'];
         }
         
         if (!isset($_SESSION['carrito'][$producto_id])) {
@@ -37,15 +54,24 @@ class Carrito {
                 'codigo' => $producto['codigo_barras'],
                 'nombre' => $producto['nombre'],
                 'descripcion' => $producto['descripcion'],
-                'precio' => $producto['precio_venta'],
+                'precio' => floatval($producto['precio_venta']),
                 'cantidad' => $cantidad,
-                'stock' => $producto['stock_actual']
+                'stock' => intval($producto['stock_actual'])
             ];
         } else {
             $nueva_cantidad = $_SESSION['carrito'][$producto_id]['cantidad'] + $cantidad;
+            
+            // Verificar stock con la nueva cantidad
             if ($nueva_cantidad > $producto['stock_actual']) {
                 return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
             }
+            
+            // Verificar límite por producto (máximo 99 unidades por producto)
+            $MAX_POR_PRODUCTO = 99;
+            if ($nueva_cantidad > $MAX_POR_PRODUCTO) {
+                return ['success' => false, 'message' => "Máximo $MAX_POR_PRODUCTO unidades por producto"];
+            }
+            
             $_SESSION['carrito'][$producto_id]['cantidad'] = $nueva_cantidad;
         }
         
@@ -62,6 +88,20 @@ class Carrito {
             return $this->obtener();
         }
         
+        // Validar cantidad
+        if ($cantidad === false) {
+            return $this->obtener();
+        }
+        
+        $MAX_POR_PRODUCTO = 99;
+        if ($cantidad > $MAX_POR_PRODUCTO) {
+            return [
+                'success' => false, 
+                'message' => "Máximo $MAX_POR_PRODUCTO unidades por producto",
+                'max_stock' => $MAX_POR_PRODUCTO
+            ];
+        }
+        
         if ($cantidad <= 0) {
             return $this->eliminar($producto_id);
         }
@@ -75,16 +115,19 @@ class Carrito {
             $producto = $result->fetch_assoc();
             $stmt->close();
             
-            if ($producto && $cantidad > $producto['stock_actual']) {
+            if (!$producto) {
+                return $this->eliminar($producto_id);
+            }
+            
+            if ($cantidad > $producto['stock_actual']) {
                 return [
                     'success' => false, 
                     'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual'],
-                    'max_stock' => $producto['stock_actual']
+                    'max_stock' => intval($producto['stock_actual'])
                 ];
             }
             
             $_SESSION['carrito'][$producto_id]['cantidad'] = $cantidad;
-            $_SESSION['carrito'][$producto_id]['subtotal'] = $cantidad * $_SESSION['carrito'][$producto_id]['precio'];
         }
         
         return $this->obtener();
@@ -134,12 +177,30 @@ class Carrito {
             return ['success' => false, 'message' => 'Carrito vacío'];
         }
         
+        // Validar que todos los productos existan y tengan stock suficiente
+        foreach ($carrito['items'] as $item) {
+            if (!isset($item['id']) || !isset($item['cantidad'])) {
+                return ['success' => false, 'message' => 'Datos de producto inválidos'];
+            }
+            
+            if ($item['cantidad'] <= 0) {
+                return ['success' => false, 'message' => 'Cantidad inválida para ' . ($item['nombre'] ?? 'producto')];
+            }
+        }
+        
+        // Validar pago en efectivo
         if ($metodo_pago === 'Efectivo') {
             $efectivo_recibido = filter_var($efectivo_recibido, FILTER_VALIDATE_FLOAT);
             $cambio = filter_var($cambio, FILTER_VALIDATE_FLOAT);
             
             if ($efectivo_recibido === false || $efectivo_recibido <= 0) {
                 return ['success' => false, 'message' => 'Cantidad de efectivo inválida'];
+            }
+            
+            // Validar que el efectivo no sea excesivamente mayor al total
+            $MAX_EXCESO = 10000;
+            if ($efectivo_recibido - $carrito['total'] > $MAX_EXCESO) {
+                return ['success' => false, 'message' => 'El efectivo recibido excede el total por más de $' . number_format($MAX_EXCESO, 2)];
             }
             
             if ($cambio === false || $cambio < 0) {
@@ -150,28 +211,56 @@ class Carrito {
         $conn->begin_transaction();
         
         try {
+            // Bloquear productos para evitar race conditions
+            $productos_ids = array_column($carrito['items'], 'id');
+            $placeholders = implode(',', array_fill(0, count($productos_ids), '?'));
+            $types = str_repeat('i', count($productos_ids));
+            
+            $stmt = $conn->prepare("SELECT id, stock_actual FROM productos WHERE id IN ($placeholders) FOR UPDATE");
+            $stmt->bind_param($types, ...$productos_ids);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $productos_stock = [];
+            while ($row = $result->fetch_assoc()) {
+                $productos_stock[$row['id']] = $row['stock_actual'];
+            }
+            $stmt->close();
+            
+            // Validar stock de todos los productos
             foreach ($carrito['items'] as $item) {
-                $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ? FOR UPDATE");
-                $stmt->bind_param("i", $item['id']);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                $producto = $result->fetch_assoc();
-                $stmt->close();
+                if (!isset($productos_stock[$item['id']])) {
+                    throw new Exception("Producto no encontrado: {$item['nombre']}");
+                }
                 
-                if (!$producto || $item['cantidad'] > $producto['stock_actual']) {
-                    throw new Exception("Stock insuficiente para: {$item['nombre']}");
+                if ($item['cantidad'] > $productos_stock[$item['id']]) {
+                    throw new Exception("Stock insuficiente para: {$item['nombre']}. Disponible: {$productos_stock[$item['id']]}");
                 }
             }
             
             $folio = generarFolio();
             
+            // Validar que el folio no exista ya
+            $stmt = $conn->prepare("SELECT id FROM ventas WHERE folio = ?");
+            $stmt->bind_param("s", $folio);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $folio = generarFolio() . '-' . random_int(1, 99);
+            }
+            $stmt->close();
+            
             $stmt = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("sddsss", $folio, $carrito['subtotal'], $carrito['total'], $metodo_pago, $efectivo_recibido, $cambio);
+            $subtotal = floatval($carrito['subtotal']);
+            $total = floatval($carrito['total']);
+            $efectivo_recibido_db = $efectivo_recibido !== null ? floatval($efectivo_recibido) : null;
+            $cambio_db = $cambio !== null ? floatval($cambio) : null;
+            
+            $stmt->bind_param("sddssd", $folio, $subtotal, $total, $metodo_pago, $efectivo_recibido_db, $cambio_db);
             $stmt->execute();
             $venta_id = $conn->insert_id;
             $stmt->close();
             
-            // Verificar si hay caja abierta y asociar la venta
+            // Verificar si hay caja abierta
             $caja_stmt = $conn->prepare("SELECT id FROM cortes_caja WHERE estado = 'abierta' ORDER BY fecha_apertura DESC LIMIT 1");
             $caja_stmt->execute();
             $caja_result = $caja_stmt->get_result();
@@ -187,18 +276,13 @@ class Carrito {
             
             foreach ($carrito['items'] as $item) {
                 $stmt = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)");
-                $stmt->bind_param("iiidd", $venta_id, $item['id'], $item['cantidad'], $item['precio'], $item['subtotal']);
+                $precio = floatval($item['precio']);
+                $subtotal_item = floatval($item['subtotal']);
+                $stmt->bind_param("iiidd", $venta_id, $item['id'], $item['cantidad'], $precio, $subtotal_item);
                 $stmt->execute();
                 $stmt->close();
                 
-                $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
-                $stmt->bind_param("i", $item['id']);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                $producto = $result->fetch_assoc();
-                $stock_anterior = $producto['stock_actual'];
-                $stmt->close();
-                
+                $stock_anterior = $productos_stock[$item['id']];
                 $stock_nuevo = $stock_anterior - $item['cantidad'];
                 
                 $stmt = $conn->prepare("UPDATE productos SET stock_actual = ? WHERE id = ?");

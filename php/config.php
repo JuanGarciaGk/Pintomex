@@ -22,6 +22,24 @@ if (!isset($_SESSION['carrito'])) {
     $_SESSION['carrito'] = [];
 }
 
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+function generarCsrfToken() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function validarCsrfToken($token) {
+    if (empty($token) || empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
 function sanitize($data) {
     $data = trim($data);
     $data = stripslashes($data);

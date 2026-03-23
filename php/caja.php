@@ -7,7 +7,6 @@ class Caja {
         global $conn;
         
         try {
-            // Verificar si hay caja abierta
             $stmt = $conn->prepare("SELECT * FROM cortes_caja WHERE estado = 'abierta' ORDER BY fecha_apertura DESC LIMIT 1");
             $stmt->execute();
             $result = $stmt->get_result();
@@ -15,7 +14,6 @@ class Caja {
             $stmt->close();
             
             if ($caja_abierta) {
-                // Obtener ventas del día que pertenecen a la caja ABIERTA actual
                 $stmt = $conn->prepare("SELECT 
                                             COUNT(*) as total_ventas,
                                             COUNT(CASE WHEN metodo_pago = 'Efectivo' THEN 1 END) as ventas_efectivo,
@@ -30,7 +28,6 @@ class Caja {
                 $ventas_hoy = $result->fetch_assoc();
                 $stmt->close();
                 
-                // Obtener gastos del día
                 $stmt = $conn->prepare("SELECT COALESCE(SUM(monto), 0) as total_gastos 
                                         FROM movimientos_caja 
                                         WHERE corte_caja_id = ? 
@@ -48,7 +45,7 @@ class Caja {
                     'caja' => $caja_abierta,
                     'ventas_hoy' => intval($ventas_hoy['total_ventas']),
                     'ventas_efectivo' => intval($ventas_hoy['ventas_efectivo']),
-                    'total_ventas_hoy' => floatval($ventas_hoy['total_efectivo']), // Solo efectivo para la caja física
+                    'total_ventas_hoy' => floatval($ventas_hoy['total_efectivo']),
                     'total_electronico' => floatval($ventas_hoy['total_electronico']),
                     'total_gastos' => $total_gastos
                 ];
@@ -75,7 +72,11 @@ class Caja {
                 return ['success' => false, 'message' => 'Monto inicial inválido'];
             }
             
-            // Verificar que no haya caja abierta
+            $MAX_MONTO_INICIAL = 100000;
+            if ($monto_inicial > $MAX_MONTO_INICIAL) {
+                return ['success' => false, 'message' => "Monto inicial no puede exceder $" . number_format($MAX_MONTO_INICIAL, 2)];
+            }
+            
             $stmt = $conn->prepare("SELECT id FROM cortes_caja WHERE estado = 'abierta'");
             $stmt->execute();
             $result = $stmt->get_result();
@@ -95,7 +96,6 @@ class Caja {
                 $corte_id = $conn->insert_id;
                 $stmt->close();
                 
-                // Registrar movimiento inicial
                 $this->registrarMovimiento($corte_id, 'ingreso', 'Apertura de caja', $monto_inicial);
                 
                 $conn->commit();
@@ -122,7 +122,13 @@ class Caja {
                 return ['success' => false, 'message' => 'Monto final inválido'];
             }
             
-            // Obtener caja abierta
+            $MAX_MONTO_FINAL = 1000000;
+            if ($monto_final > $MAX_MONTO_FINAL) {
+                return ['success' => false, 'message' => "Monto final no puede exceder $" . number_format($MAX_MONTO_FINAL, 2)];
+            }
+            
+            $observaciones = substr($observaciones, 0, 500);
+            
             $stmt = $conn->prepare("SELECT * FROM cortes_caja WHERE estado = 'abierta' ORDER BY fecha_apertura DESC LIMIT 1");
             $stmt->execute();
             $result = $stmt->get_result();
@@ -133,8 +139,6 @@ class Caja {
                 return ['success' => false, 'message' => 'No hay caja abierta'];
             }
             
-            // Obtener ventas del día que pertenecen a esta caja (NO asignadas o asignadas a esta caja)
-            // SOLO CONTAMOS EFECTIVO PARA LA CAJA FÍSICA
             $stmt = $conn->prepare("SELECT 
                                         COALESCE(SUM(CASE WHEN metodo_pago = 'Efectivo' THEN total ELSE 0 END), 0) as total_efectivo,
                                         COALESCE(SUM(CASE WHEN metodo_pago != 'Efectivo' THEN total ELSE 0 END), 0) as total_electronico
@@ -149,7 +153,6 @@ class Caja {
             $total_electronico = floatval($ventas['total_electronico']);
             $stmt->close();
             
-            // Obtener gastos del día
             $stmt = $conn->prepare("SELECT COALESCE(SUM(monto), 0) as total_gastos FROM movimientos_caja WHERE corte_caja_id = ? AND tipo = 'egreso'");
             $stmt->bind_param("i", $caja['id']);
             $stmt->execute();
@@ -158,19 +161,16 @@ class Caja {
             $total_gastos = floatval($gastos['total_gastos']);
             $stmt->close();
             
-            // Calcular esperado vs real (considerando efectivo y gastos)
             $esperado = $caja['monto_inicial'] + $total_efectivo - $total_gastos;
             $diferencia = $monto_final - $esperado;
             
             $conn->begin_transaction();
             
-            // Actualizar ventas con este corte (solo las que son de hoy y no tienen corte asignado)
             $stmt = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE DATE(fecha) = CURDATE() AND corte_caja_id IS NULL");
             $stmt->bind_param("i", $caja['id']);
             $stmt->execute();
             $stmt->close();
             
-            // Cerrar caja - guardamos total_efectivo en total_ventas para mantener compatibilidad
             $stmt = $conn->prepare("UPDATE cortes_caja SET 
                                     fecha_cierre = NOW(), 
                                     monto_final = ?, 
@@ -211,6 +211,19 @@ class Caja {
         global $conn;
         
         try {
+            if (!in_array($tipo, ['ingreso', 'egreso'])) {
+                return false;
+            }
+            
+            $concepto = substr($concepto, 0, 255);
+            
+            $monto = floatval($monto);
+            if ($monto <= 0) {
+                return false;
+            }
+            
+            $referencia = substr($referencia, 0, 100);
+            
             $stmt = $conn->prepare("INSERT INTO movimientos_caja (corte_caja_id, tipo, concepto, monto, referencia) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("issds", $corte_id, $tipo, $concepto, $monto, $referencia);
             $result = $stmt->execute();
@@ -226,7 +239,24 @@ class Caja {
         global $conn;
         
         try {
-            // Obtener caja abierta
+            if (empty($concepto)) {
+                return ['success' => false, 'message' => 'Concepto requerido'];
+            }
+            
+            $concepto = substr($concepto, 0, 255);
+            
+            $monto = filter_var($monto, FILTER_VALIDATE_FLOAT);
+            if ($monto === false || $monto <= 0) {
+                return ['success' => false, 'message' => 'Monto inválido'];
+            }
+            
+            $MAX_GASTO = 50000;
+            if ($monto > $MAX_GASTO) {
+                return ['success' => false, 'message' => "El gasto no puede exceder $" . number_format($MAX_GASTO, 2)];
+            }
+            
+            $referencia = substr($referencia, 0, 100);
+            
             $stmt = $conn->prepare("SELECT id FROM cortes_caja WHERE estado = 'abierta' ORDER BY fecha_apertura DESC LIMIT 1");
             $stmt->execute();
             $result = $stmt->get_result();
@@ -235,11 +265,6 @@ class Caja {
             
             if (!$caja) {
                 return ['success' => false, 'message' => 'No hay caja abierta'];
-            }
-            
-            $monto = filter_var($monto, FILTER_VALIDATE_FLOAT);
-            if ($monto === false || $monto <= 0) {
-                return ['success' => false, 'message' => 'Monto inválido'];
             }
             
             if ($this->registrarMovimiento($caja['id'], 'egreso', $concepto, $monto, $referencia)) {
@@ -286,7 +311,6 @@ class Caja {
                 return ['success' => false, 'message' => 'ID inválido'];
             }
             
-            // Obtener datos del corte
             $stmt = $conn->prepare("SELECT * FROM cortes_caja WHERE id = ?");
             $stmt->bind_param("i", $corte_id);
             $stmt->execute();
@@ -298,7 +322,6 @@ class Caja {
                 return ['success' => false, 'message' => 'Corte no encontrado'];
             }
             
-            // Obtener ventas de ese corte
             $stmt = $conn->prepare("SELECT v.*, COUNT(dv.id) as total_productos 
                                     FROM ventas v 
                                     LEFT JOIN detalles_venta dv ON v.id = dv.venta_id 
@@ -315,7 +338,6 @@ class Caja {
             }
             $stmt->close();
             
-            // Obtener movimientos de caja
             $stmt = $conn->prepare("SELECT * FROM movimientos_caja WHERE corte_caja_id = ? ORDER BY fecha");
             $stmt->bind_param("i", $corte_id);
             $stmt->execute();

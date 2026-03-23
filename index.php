@@ -1,14 +1,38 @@
+<?php
+require_once 'php/config.php';
+
+if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+    header('HTTP/1.1 304 Not Modified');
+    exit;
+}
+
+header('Cache-Control: public, max-age=86400');
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Pintumex - Punto de Venta</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
-    <link rel="stylesheet" href="css/fontawesome/css/all.min.css">
+    <meta name="csrf-token" content="<?php echo generarCsrfToken(); ?>">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh}.sistema-pos{display:grid;grid-template-columns:250px 1fr 350px;height:100vh;overflow:hidden}.sidebar{background:#2E2168;color:#fff;height:100vh;overflow-y:auto}.logo{text-align:center;padding:1.5rem 1rem;border-bottom:1px solid rgba(255,255,255,0.1)}.logo h1{color:#3e9e45;text-shadow:0 1px 2px rgba(0,0,0,0.2)}.carrito-panel{background:#fff;border-left:2px solid rgba(0,0,0,0.05);height:100vh;display:flex;flex-direction:column;overflow:hidden}.loading-spinner{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:50px;height:50px;border:5px solid #f3f3f3;border-top-color:#2b7c30;border-radius:50%;animation:spin 1s linear infinite;z-index:9999}.hidden{display:none}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:992px){.sistema-pos{grid-template-columns:1fr}.sidebar{display:none}.carrito-panel{position:fixed;right:0;top:0;width:min(350px,90%);transform:translateX(100%);z-index:1000}.carrito-panel.visible{transform:translateX(0)}}
+    </style>
+    
+    <link rel="preload" href="css/fontawesome/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/fontawesome/css/all.min.css"></noscript>
+    
     <link rel="preload" href="css/estilo.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/estilo.css"></noscript>
-    <link rel="stylesheet" href="css/modulo-caja.css">
+    
+    <link rel="preload" href="css/modulo-caja.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/modulo-caja.css"></noscript>
+    
     <style>
         .escanner-input { position: relative; }
         #codigoBarras {
@@ -20,10 +44,41 @@
             border-color: #e67e22;
             box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.4);
         }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #2b7c30;
+            color: white;
+            padding: 8px;
+            z-index: 100;
+            text-decoration: none;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+        :focus-visible {
+            outline: 3px solid #2b7c30;
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
-    <div class="sistema-pos">
+    <a href="#contenido-principal" class="skip-link">Saltar al contenido principal</a>
+    <div id="loadingSpinner" class="loading-spinner"></div>
+    
+    <div class="sistema-pos" id="sistemaPos" style="display: none;">
         <aside class="sidebar">
             <div class="logo">
                 <h1>Pintumex</h1>
@@ -32,23 +87,23 @@
             
             <nav aria-label="Menú principal">
                 <ul class="menu">
-                    <li class="menu-item active" data-modulo="caja">
+                    <li class="menu-item active" data-modulo="caja" role="button" tabindex="0" aria-label="Módulo de caja">
                         <i class="fas fa-cash-register" aria-hidden="true"></i>
                         <span>Caja</span>
                     </li>
-                    <li class="menu-item" data-modulo="puntoventa">
+                    <li class="menu-item" data-modulo="puntoventa" role="button" tabindex="0" aria-label="Módulo punto de venta">
                         <i class="fas fa-shopping-cart" aria-hidden="true"></i>
                         <span>Punto de Venta</span>
                     </li>
-                    <li class="menu-item" data-modulo="productos">
+                    <li class="menu-item" data-modulo="productos" role="button" tabindex="0" aria-label="Módulo de productos">
                         <i class="fas fa-box" aria-hidden="true"></i>
                         <span>Productos</span>
                     </li>
-                    <li class="menu-item" data-modulo="inventario">
+                    <li class="menu-item" data-modulo="inventario" role="button" tabindex="0" aria-label="Módulo de inventario">
                         <i class="fas fa-warehouse" aria-hidden="true"></i>
                         <span>Inventario</span>
                     </li>
-                    <li class="menu-item" data-modulo="reportes">
+                    <li class="menu-item" data-modulo="reportes" role="button" tabindex="0" aria-label="Módulo de reportes">
                         <i class="fas fa-chart-bar" aria-hidden="true"></i>
                         <span>Reportes</span>
                     </li>
@@ -56,7 +111,7 @@
             </nav>
         </aside>
         
-        <main class="contenido-principal">
+        <main class="contenido-principal" id="contenido-principal">
             <section class="escanner-section" aria-labelledby="escanner-titulo">
                 <h2 id="escanner-titulo" class="visually-hidden">Buscador de productos</h2>
                 <div class="buscador-container">
@@ -68,8 +123,8 @@
                                autofocus 
                                autocomplete="off"
                                spellcheck="false"
-                               aria-label="Campo de búsqueda">
-                        <button class="btn-escanner" style="display: none;" id="btnEscannerOculto">
+                               aria-label="Campo de búsqueda de productos">
+                        <button class="btn-escanner" style="display: none;" id="btnEscannerOculto" aria-hidden="true">
                             <i class="fas fa-barcode" aria-hidden="true"></i>
                             Buscar
                         </button>
@@ -79,15 +134,8 @@
                 
                 <nav aria-label="Filtros por categoría">
                     <h3 class="visually-hidden">Categorías de productos</h3>
-                    <div class="filtros-categoria">
-                        <button class="filtro-btn active" aria-pressed="true">Todas</button>
-                        <button class="filtro-btn" aria-pressed="false">Acrílicas</button>
-                        <button class="filtro-btn" aria-pressed="false">Esmaltes</button>
-                        <button class="filtro-btn" aria-pressed="false">Selladores</button>
-                        <button class="filtro-btn" aria-pressed="false">Barniz</button>
-                        <button class="filtro-btn" aria-pressed="false">Aerosol</button>
-                        <button class="filtro-btn" aria-pressed="false">Impermeabilizante</button>
-                        <button class="filtro-btn" aria-pressed="false">Complementos</button>
+                    <div class="filtros-categoria" id="filtrosCategoria">
+                        <button class="filtro-btn active" data-categoria="Todas" aria-label="Filtrar por categoría Todas">Todas</button>
                     </div>
                 </nav>
                 
@@ -104,7 +152,7 @@
             </div>
             
             <div class="carrito-items-container">
-                <div class="carrito-items" id="carritoItems" aria-label="Productos en el carrito"></div>
+                <div class="carrito-items" id="carritoItems" aria-label="Productos en el carrito" aria-live="polite"></div>
             </div>
             
             <div class="carrito-totales" aria-label="Resumen de la compra">
@@ -141,15 +189,15 @@
             <div class="metodos-pago-container">
                 <h3 class="visually-hidden">Métodos de pago</h3>
                 <div class="metodos-pago" role="radiogroup" aria-label="Seleccione método de pago">
-                    <button class="metodo-pago-btn" data-metodo="Efectivo" role="radio" aria-checked="false">
+                    <button class="metodo-pago-btn" data-metodo="Efectivo" role="radio" aria-checked="false" aria-label="Pagar con efectivo">
                         <i class="fas fa-money-bill" aria-hidden="true"></i>
                         Efectivo
                     </button>
-                    <button class="metodo-pago-btn" data-metodo="Tarjeta" role="radio" aria-checked="false">
+                    <button class="metodo-pago-btn" data-metodo="Tarjeta" role="radio" aria-checked="false" aria-label="Pagar con tarjeta">
                         <i class="fas fa-credit-card" aria-hidden="true"></i>
                         Tarjeta
                     </button>
-                    <button class="metodo-pago-btn" data-metodo="Transferencia" role="radio" aria-checked="false">
+                    <button class="metodo-pago-btn" data-metodo="Transferencia" role="radio" aria-checked="false" aria-label="Pagar con transferencia">
                         <i class="fas fa-university" aria-hidden="true"></i>
                         Transferencia
                     </button>
@@ -157,7 +205,7 @@
             </div>
             
             <div class="btn-procesar-container">
-                <button class="btn-procesar" id="btnProcesar" disabled aria-disabled="true">
+                <button class="btn-procesar" id="btnProcesar" disabled aria-disabled="true" aria-label="Procesar venta">
                     <i class="fas fa-check-circle" aria-hidden="true"></i>
                     Procesar Venta
                 </button>
@@ -186,21 +234,26 @@
         </div>
     </div>
     
-    <style>
-        .visually-hidden {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            margin: -1px;
-            padding: 0;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            border: 0;
-        }
-    </style>
+    <script>
+        window.addEventListener('load', function() {
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('sistemaPos').style.display = 'grid';
+        });
+        
+        const categorias = ['Acrílicas', 'Esmaltes', 'Selladores', 'Barniz', 'Aerosol', 'Impermeabilizante', 'Complementos'];
+        const filtrosContainer = document.getElementById('filtrosCategoria');
+        categorias.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = 'filtro-btn';
+            btn.textContent = cat;
+            btn.setAttribute('data-categoria', cat);
+            btn.setAttribute('aria-label', `Filtrar por categoría ${cat}`);
+            filtrosContainer.appendChild(btn);
+        });
+    </script>
     
-    <script src="js/ticket-printer.js"></script>
-    <script src="js/script.js" async></script>
-    <script src="js/modulo-caja.js"></script>
+    <script src="js/ticket-printer.js" defer></script>
+    <script src="js/script.js" defer></script>
+    <script src="js/modulo-caja.js" defer></script>
 </body>
 </html>

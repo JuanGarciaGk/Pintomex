@@ -13,32 +13,44 @@ class POSSystem {
         this.scannerBuffer = '';
         this.scannerTimeout = null;
         this.scannerActive = true;
+        this.observer = null;
+        this.categorias = ['Acrílicas', 'Esmaltes', 'Selladores', 'Barniz', 'Aerosol', 'Impermeabilizante', 'Complementos'];
     }
 
     async init() {
         console.log('Inicializando POSSystem...');
-        
         this.startMeasure('init');
-        
         this.cargarEventos();
         this.initResponsive();
-        this.agregarRippleEffect();
-        this.iniciarBuscadorPredictivo();
-        this.initModulos();
-        this.iniciarActualizacionAutomatica();
-        this.configurarAtajosTeclado();
         this.initPerformanceOptimizations();
         this.initScanner();
-
+        this.iniciarCategorias();
+        
         await Promise.all([
             this.verificarConexionBD(),
             this.cargarProductosDesdeBD(),
             this.actualizarCarrito()
         ]);
-
-        setTimeout(() => {
-            document.getElementById('codigoBarras')?.focus();
-        }, 100);
+        
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => {
+                this.agregarRippleEffect();
+                this.iniciarBuscadorPredictivo();
+                this.initModulos();
+                this.iniciarActualizacionAutomatica();
+                this.configurarAtajosTeclado();
+                document.getElementById('codigoBarras')?.focus();
+            });
+        } else {
+            setTimeout(() => {
+                this.agregarRippleEffect();
+                this.iniciarBuscadorPredictivo();
+                this.initModulos();
+                this.iniciarActualizacionAutomatica();
+                this.configurarAtajosTeclado();
+                document.getElementById('codigoBarras')?.focus();
+            }, 100);
+        }
 
         this.endMeasure('init');
     }
@@ -53,9 +65,6 @@ class POSSystem {
         if (start) {
             const duration = end - start;
             console.log(`⏱️ ${label}: ${duration.toFixed(2)}ms`);
-            if (duration > 3000) {
-                console.warn(`⚠️ Operación lenta: ${label} tomó ${duration.toFixed(2)}ms`);
-            }
             delete this.metrics[label];
         }
     }
@@ -73,11 +82,44 @@ class POSSystem {
             resizeTimeout = setTimeout(setVH, 150);
         });
 
-        if (window.innerWidth <= 768 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             document.documentElement.classList.add('reduce-animations');
         }
+        
+        this.setupLazyLoading();
+    }
 
-        this.cache = new Map();
+    setupLazyLoading() {
+        if ('IntersectionObserver' in window) {
+            this.observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const card = entry.target;
+                        if (card.dataset.loaded !== 'true') {
+                            card.dataset.loaded = 'true';
+                        }
+                        this.observer?.unobserve(card);
+                    }
+                });
+            }, { rootMargin: '50px' });
+        }
+    }
+
+    iniciarCategorias() {
+        const filtrosContainer = document.getElementById('filtrosCategoria');
+        if (!filtrosContainer) return;
+        
+        const existingButtons = filtrosContainer.querySelectorAll('.filtro-btn');
+        if (existingButtons.length === 1) {
+            this.categorias.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.className = 'filtro-btn';
+                btn.textContent = cat;
+                btn.setAttribute('data-categoria', cat);
+                btn.setAttribute('aria-label', `Filtrar por categoría ${cat}`);
+                filtrosContainer.appendChild(btn);
+            });
+        }
     }
 
     initScanner() {
@@ -85,6 +127,7 @@ class POSSystem {
         
         document.addEventListener('keypress', (e) => {
             if (!this.scannerActive) return;
+            if (e.target && e.target.tagName === 'INPUT' && e.target.id === 'codigoBarras') return;
             
             const now = Date.now();
             const timeDiff = now - lastKeyTime;
@@ -159,8 +202,10 @@ class POSSystem {
         const feedback = document.createElement('div');
         feedback.className = `scanner-feedback scanner-${tipo}`;
         feedback.innerHTML = tipo === 'success' ? 
-            '<i class="fas fa-check-circle"></i> Producto agregado' : 
-            '<i class="fas fa-times-circle"></i> Producto no encontrado';
+            '<i class="fas fa-check-circle" aria-hidden="true"></i> Producto agregado' : 
+            '<i class="fas fa-times-circle" aria-hidden="true"></i> Producto no encontrado';
+        feedback.setAttribute('role', 'status');
+        feedback.setAttribute('aria-live', 'polite');
         
         document.body.appendChild(feedback);
         
@@ -185,15 +230,63 @@ class POSSystem {
             return cached.data;
         }
 
-        const response = await fetch(url, options);
-        const data = await response.json();
-        
-        this.cache.set(key, {
-            data,
-            timestamp: Date.now()
-        });
+        try {
+            const response = await fetch(url, options);
+            const data = await response.json();
+            
+            this.cache.set(key, {
+                data,
+                timestamp: Date.now()
+            });
 
-        return data;
+            return data;
+        } catch (error) {
+            console.error('Error en cachedFetch:', error);
+            throw error;
+        }
+    }
+
+    async obtenerCsrfToken() {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        if (tokenMeta) {
+            return tokenMeta.getAttribute('content');
+        }
+        
+        try {
+            const response = await fetch(this.apiUrl + '?accion=getCsrfToken');
+            const data = await response.json();
+            if (data.success && data.token) {
+                return data.token;
+            }
+        } catch (error) {
+            console.error('Error obteniendo CSRF token:', error);
+        }
+        
+        return '';
+    }
+
+    async postWithCsrf(url, formData) {
+        const csrfToken = await this.obtenerCsrfToken();
+        formData.append('csrf_token', csrfToken);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        try {
+            const response = await fetch(url, { 
+                method: 'POST', 
+                body: formData,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error('Timeout en la petición');
+            }
+            throw error;
+        }
     }
 
     configurarAtajosTeclado() {
@@ -231,11 +324,6 @@ class POSSystem {
                 e.preventDefault();
                 this.mostrarAyudaAtajos();
             }
-            
-            if (e.ctrlKey && e.key === 'n') {
-                e.preventDefault();
-                document.getElementById('codigoBarras')?.focus();
-            }
         });
     }
 
@@ -243,11 +331,14 @@ class POSSystem {
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.style.display = 'flex';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', 'Atajos de teclado');
         
         modal.innerHTML = `
             <div class="modal-contenido" style="max-width: 500px;">
                 <h3 style="color: var(--primary); margin-bottom: 1.5rem;">
-                    <i class="fas fa-keyboard"></i> Atajos de Teclado
+                    <i class="fas fa-keyboard" aria-hidden="true"></i> Atajos de Teclado
                 </h3>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -261,17 +352,21 @@ class POSSystem {
                 </div>
                 
                 <div style="margin-top: 2rem; padding: 1rem; background: var(--light); border-radius: var(--radius-md);">
-                    <p><i class="fas fa-info-circle"></i> También puedes hacer clic en los productos para agregarlos al carrito</p>
+                    <p><i class="fas fa-info-circle" aria-hidden="true"></i> También puedes hacer clic en los productos para agregarlos al carrito</p>
                 </div>
                 
-                <button onclick="this.closest('.modal').remove()" 
+                <button class="btn-cerrar-atajos" 
                         style="width: 100%; margin-top: 1.5rem; padding: 1rem; background: var(--primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer;">
-                    <i class="fas fa-check"></i> Cerrar
+                    <i class="fas fa-check" aria-hidden="true"></i> Cerrar
                 </button>
             </div>
         `;
         
         document.body.appendChild(modal);
+        
+        modal.querySelector('.btn-cerrar-atajos').addEventListener('click', () => {
+            modal.remove();
+        });
     }
 
     iniciarActualizacionAutomatica() {
@@ -293,22 +388,12 @@ class POSSystem {
             if (data.success) {
                 if (!data.caja_abierta) {
                     this.mostrarNotificacion('Debe abrir la caja antes de realizar ventas', 'warning');
-                    
                     const cajaMenuItem = document.querySelector('.menu-item[data-modulo="caja"]');
                     if (cajaMenuItem) {
                         cajaMenuItem.click();
                     }
                     return false;
                 }
-                
-                if (window.moduloCaja) {
-                    window.moduloCaja.datosCaja = {
-                        ...window.moduloCaja.datosCaja,
-                        total_ventas_hoy: data.total_ventas_hoy,
-                        ventas_hoy: data.ventas_hoy
-                    };
-                }
-                
                 return true;
             }
             return false;
@@ -345,6 +430,12 @@ class POSSystem {
                     }
                 }
             });
+            
+            item.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.currentTarget.click();
+                }
+            });
         });
     }
 
@@ -365,13 +456,7 @@ class POSSystem {
         this.mostrarCargando(true);
         
         try {
-            const response = await fetch(this.apiUrl + '?accion=getProductos');
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
+            const data = await this.cachedFetch(this.apiUrl + '?accion=getProductos', {}, 300000);
             this.productos = data;
             
             requestAnimationFrame(() => {
@@ -436,37 +521,18 @@ class POSSystem {
             formData.append('producto_id', productoId);
             formData.append('cantidad', cantidad);
             
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+            const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             
             if (data.success) {
                 this.carrito = data.carrito.items;
-                
                 requestAnimationFrame(() => {
                     this.renderizarCarrito(data.carrito);
                 });
-                
                 this.mostrarNotificacion('✅ Producto agregado al carrito', 'success');
-                
                 document.getElementById('codigoBarras')?.focus();
             } else {
-                if (data.message) {
-                    if (data.message.includes('Stock insuficiente')) {
-                        this.mostrarNotificacion(`❌ ${data.message}`, 'error');
-                    } else {
-                        this.mostrarNotificacion(`❌ ${data.message}`, 'error');
-                    }
-                } else {
-                    this.mostrarNotificacion('❌ Error al agregar producto', 'error');
-                }
+                this.mostrarNotificacion(`❌ ${data.message || 'Error al agregar producto'}`, 'error');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -481,30 +547,8 @@ class POSSystem {
                 sugerencias.innerHTML = '';
             }
             
-            document.getElementById('codigoBarras').value = '';
-        }
-    }
-
-    async buscarPorCodigo(termino) {
-        if (!termino || this.cargando) return;
-        
-        try {
-            const response = await fetch(this.apiUrl + '?accion=buscarPorCodigo&codigo=' + encodeURIComponent(termino));
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const producto = await response.json();
-            
-            if (producto && producto.id) {
-                await this.agregarAlCarrito(producto.id, 1);
-            } else {
-                await this.buscarSugerencias(termino);
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            this.mostrarNotificacion('Error en la búsqueda: ' + error.message, 'error');
+            const input = document.getElementById('codigoBarras');
+            if (input) input.value = '';
         }
     }
 
@@ -520,11 +564,6 @@ class POSSystem {
         
         try {
             const response = await fetch(this.apiUrl + '?accion=buscarProductos&termino=' + encodeURIComponent(termino));
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
             const productos = await response.json();
             
             if (productos.length === 0) {
@@ -541,6 +580,7 @@ class POSSystem {
                 item.dataset.id = producto.id;
                 item.tabIndex = 0;
                 item.role = 'option';
+                item.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio_venta).toFixed(2)}`);
                 
                 item.innerHTML = `
                     <div class="sugerencia-info">
@@ -550,7 +590,7 @@ class POSSystem {
                             <span>${this.escapeHTML(producto.descripcion || '')}</span>
                         </div>
                         <div class="sugerencia-stock ${producto.stock_actual <= producto.stock_minimo ? 'stock-bajo-sugerencia' : ''}">
-                            <i class="fas fa-box"></i> Stock: ${producto.stock_actual}
+                            <i class="fas fa-box" aria-hidden="true"></i> Stock: ${producto.stock_actual}
                         </div>
                     </div>
                     <div class="sugerencia-precio">$${parseFloat(producto.precio_venta).toFixed(2)}</div>
@@ -596,11 +636,6 @@ class POSSystem {
     async actualizarCarrito() {
         try {
             const response = await fetch(this.apiUrl + '?accion=getCarrito');
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
             const data = await response.json();
             this.carrito = data.items;
             this.renderizarCarrito(data);
@@ -619,29 +654,11 @@ class POSSystem {
             formData.append('producto_id', productoId);
             formData.append('cantidad', cantidad);
             
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+            const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             
             if (data.success === false && data.message && data.message.includes('Stock insuficiente')) {
                 this.mostrarNotificacion(`❌ ${data.message}`, 'error');
-                
-                const maxStock = data.max_stock || 0;
-                const itemEnCarrito = this.carrito.find(item => item.id === productoId);
-                if (itemEnCarrito) {
-                    const input = document.querySelector(`.carrito-item [onchange*="${productoId}"]`);
-                    if (input) {
-                        input.value = itemEnCarrito.cantidad;
-                    }
-                }
-                
                 this.cargando = false;
                 return;
             }
@@ -649,10 +666,6 @@ class POSSystem {
             this.carrito = data.items;
             this.renderizarCarrito(data);
             
-            const item = this.carrito.find(i => i.id === productoId);
-            if (item) {
-                this.mostrarNotificacion(`Cantidad actualizada: ${item.cantidad}`, 'success');
-            }
         } catch (error) {
             console.error('Error:', error);
             this.mostrarNotificacion('Error al modificar: ' + error.message, 'error');
@@ -671,15 +684,7 @@ class POSSystem {
             formData.append('accion', 'eliminarCarrito');
             formData.append('producto_id', productoId);
             
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+            const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             this.carrito = data.items;
             this.renderizarCarrito(data);
@@ -701,15 +706,7 @@ class POSSystem {
             const formData = new FormData();
             formData.append('accion', 'vaciarCarrito');
             
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+            const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             this.carrito = data.items;
             this.renderizarCarrito(data);
@@ -728,11 +725,6 @@ class POSSystem {
         
         try {
             const response = await fetch(this.apiUrl + '?accion=getProductosPorCategoria&categoria=' + encodeURIComponent(this.categoriaActiva));
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
             const productos = await response.json();
             
             requestAnimationFrame(() => {
@@ -746,6 +738,180 @@ class POSSystem {
             this.mostrarCargando(false);
             this.endMeasure('filtrarProductos');
         }
+    }
+
+    mostrarProductos(productos) {
+        const grid = document.getElementById('productosGrid');
+        if (!grid) return;
+        
+        if (productos.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--gray);">No hay productos disponibles</div>';
+            return;
+        }
+        
+        const fragment = document.createDocumentFragment();
+        
+        productos.forEach(producto => {
+            const card = document.createElement('div');
+            card.className = 'producto-card';
+            card.dataset.id = producto.id;
+            card.tabIndex = 0;
+            card.role = 'button';
+            card.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio_venta).toFixed(2)} - Stock: ${producto.stock_actual}`);
+            
+            let stockClass = 'stock';
+            let stockText = `${producto.stock_actual} disponibles`;
+            
+            if (producto.stock_actual <= 0) {
+                stockClass += ' stock-agotado';
+                stockText = '❌ AGOTADO';
+                card.style.opacity = '0.5';
+                card.style.cursor = 'not-allowed';
+                card.setAttribute('aria-disabled', 'true');
+            } else if (producto.stock_actual <= producto.stock_minimo) {
+                stockClass += ' stock-bajo';
+                stockText = `⚠️ Quedan ${producto.stock_actual}`;
+            }
+            
+            card.innerHTML = `
+                <h3>${this.escapeHTML(producto.nombre)}</h3>
+                <div class="precio">$${parseFloat(producto.precio_venta).toFixed(2)}</div>
+                <div class="${stockClass}">
+                    <i class="fas fa-box" aria-hidden="true"></i> ${stockText}
+                </div>
+                <small>${this.escapeHTML(producto.descripcion || '')}</small>
+            `;
+            
+            fragment.appendChild(card);
+        });
+        
+        grid.innerHTML = '';
+        grid.appendChild(fragment);
+        
+        grid.addEventListener('click', (e) => {
+            const card = e.target.closest('.producto-card');
+            if (card && card.dataset.id && card.getAttribute('aria-disabled') !== 'true') {
+                const producto = this.productos.find(p => p.id == card.dataset.id);
+                if (producto && producto.stock_actual > 0) {
+                    this.agregarAlCarrito(parseInt(card.dataset.id));
+                } else if (producto) {
+                    this.mostrarNotificacion('❌ No hay stock disponible de este producto', 'error');
+                }
+            }
+        });
+        
+        grid.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const card = e.target.closest('.producto-card');
+                if (card && card.dataset.id && card.getAttribute('aria-disabled') !== 'true') {
+                    const producto = this.productos.find(p => p.id == card.dataset.id);
+                    if (producto && producto.stock_actual > 0) {
+                        this.agregarAlCarrito(parseInt(card.dataset.id));
+                    }
+                }
+            }
+        });
+        
+        if (this.observer) {
+            grid.querySelectorAll('.producto-card').forEach(card => {
+                this.observer.observe(card);
+            });
+        }
+    }
+
+    renderizarCarrito(data) {
+        const container = document.getElementById('carritoItems');
+        if (!container) return;
+        
+        if (data.items.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--gray);">
+                    <i class="fas fa-shopping-cart" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;" aria-hidden="true"></i>
+                    <p>Carrito vacío</p>
+                    <p style="font-size: 0.9rem; margin-top: 0.5rem;">Agregue productos para comenzar</p>
+                </div>
+            `;
+            
+            const btnVaciar = document.querySelector('.btn-vaciar-carrito');
+            if (btnVaciar) btnVaciar.style.display = 'none';
+            return;
+        }
+        
+        const fragment = document.createDocumentFragment();
+        
+        data.items.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'carrito-item';
+            itemDiv.setAttribute('aria-label', `${item.nombre} - ${item.cantidad} unidades - $${parseFloat(item.subtotal).toFixed(2)}`);
+            
+            itemDiv.innerHTML = `
+                <div class="item-info">
+                    <h4>${this.escapeHTML(item.nombre)}</h4>
+                    <p>${this.escapeHTML(item.descripcion || '')}</p>
+                    <div class="cantidad-control">
+                        <button class="btn-decrement" data-id="${item.id}" data-cantidad="${item.cantidad - 1}" ${item.cantidad <= 1 ? 'disabled' : ''} aria-label="Disminuir cantidad">
+                            <i class="fas fa-minus" aria-hidden="true"></i>
+                        </button>
+                        <input type="number" value="${item.cantidad}" min="1" max="${item.stock}" class="cantidad-input" data-id="${item.id}" aria-label="Cantidad de ${item.nombre}">
+                        <button class="btn-increment" data-id="${item.id}" data-cantidad="${item.cantidad + 1}" ${item.cantidad >= item.stock ? 'disabled' : ''} aria-label="Aumentar cantidad">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="item-precio">
+                    <div class="precio">$${parseFloat(item.precio).toFixed(2)}</div>
+                    <small>$${parseFloat(item.subtotal).toFixed(2)}</small>
+                    <button class="btn-eliminar" data-id="${item.id}" aria-label="Eliminar producto">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
+                    </button>
+                </div>
+            `;
+            fragment.appendChild(itemDiv);
+        });
+        
+        container.innerHTML = '';
+        container.appendChild(fragment);
+        
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            
+            const id = parseInt(btn.dataset.id);
+            if (btn.classList.contains('btn-decrement')) {
+                this.modificarCantidad(id, parseInt(btn.dataset.cantidad));
+            } else if (btn.classList.contains('btn-increment')) {
+                this.modificarCantidad(id, parseInt(btn.dataset.cantidad));
+            } else if (btn.classList.contains('btn-eliminar')) {
+                this.eliminarDelCarrito(id);
+            }
+        });
+        
+        container.addEventListener('change', (e) => {
+            const input = e.target.closest('.cantidad-input');
+            if (input) {
+                const id = parseInt(input.dataset.id);
+                const cantidad = parseInt(input.value) || 1;
+                this.modificarCantidad(id, cantidad);
+            }
+        });
+        
+        document.getElementById('subtotal').textContent = `$${parseFloat(data.subtotal).toFixed(2)}`;
+        document.getElementById('total').textContent = `$${parseFloat(data.total).toFixed(2)}`;
+        
+        const btnProcesar = document.getElementById('btnProcesar');
+        if (btnProcesar) {
+            btnProcesar.disabled = data.items.length === 0;
+            if (data.items.length === 0) {
+                btnProcesar.setAttribute('aria-disabled', 'true');
+            } else {
+                btnProcesar.setAttribute('aria-disabled', 'false');
+            }
+        }
+        
+        const btnVaciar = document.querySelector('.btn-vaciar-carrito');
+        if (btnVaciar) btnVaciar.style.display = 'flex';
+        
+        this.calcularCambio();
     }
 
     async procesarVenta() {
@@ -800,10 +966,6 @@ class POSSystem {
                 }, 2000);
                 return;
             }
-            
-            if (efectivo === total) {
-                this.mostrarNotificacion('💰 Pago exacto, cambio: $0.00', 'success');
-            }
         }
         
         this.cargando = true;
@@ -826,15 +988,7 @@ class POSSystem {
             if (efectivoRecibido !== null) formData.append('efectivo_recibido', efectivoRecibido);
             if (cambio !== null) formData.append('cambio', cambio);
             
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+            const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             
             if (data.success) {
@@ -842,17 +996,17 @@ class POSSystem {
                     folio: data.folio,
                     fecha: new Date().toLocaleString(),
                     items: this.carrito.map(item => ({
-                    nombre: item.nombre,
-                    cantidad: item.cantidad,
-                    precio: parseFloat(item.precio), // Asegurar que sea número
-                    subtotal: parseFloat(item.subtotal) // Asegurar que sea número
-                })),
-        subtotal: parseFloat(total),
-        total: parseFloat(total),
-        metodo_pago: this.metodoPagoActivo,
-        efectivo_recibido: efectivoRecibido ? parseFloat(efectivoRecibido) : null,
-        cambio: cambio ? parseFloat(cambio) : null
-    };
+                        nombre: item.nombre,
+                        cantidad: item.cantidad,
+                        precio: parseFloat(item.precio),
+                        subtotal: parseFloat(item.subtotal)
+                    })),
+                    subtotal: parseFloat(total),
+                    total: parseFloat(total),
+                    metodo_pago: this.metodoPagoActivo,
+                    efectivo_recibido: efectivoRecibido ? parseFloat(efectivoRecibido) : null,
+                    cambio: cambio ? parseFloat(cambio) : null
+                };
                 
                 if (window.ticketPrinter) {
                     await window.ticketPrinter.printTicket(venta, true);
@@ -878,7 +1032,10 @@ class POSSystem {
                 this.renderizarCarrito({ items: [], subtotal: 0, total: 0 });
                 
                 this.metodoPagoActivo = null;
-                document.querySelectorAll('.metodo-pago-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.metodo-pago-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-checked', 'false');
+                });
                 document.getElementById('efectivoSection').style.display = 'none';
                 if (document.getElementById('efectivoRecibido')) {
                     document.getElementById('efectivoRecibido').value = '';
@@ -893,15 +1050,7 @@ class POSSystem {
                 
                 document.getElementById('codigoBarras')?.focus();
             } else {
-                if (data.message) {
-                    if (data.message.includes('Stock insuficiente')) {
-                        this.mostrarNotificacion(`❌ ${data.message}`, 'error');
-                    } else {
-                        this.mostrarNotificacion(`❌ ${data.message}`, 'error');
-                    }
-                } else {
-                    this.mostrarNotificacion('❌ Error al procesar venta', 'error');
-                }
+                this.mostrarNotificacion(`❌ ${data.message || 'Error al procesar venta'}`, 'error');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -910,167 +1059,6 @@ class POSSystem {
             this.cargando = false;
             this.endMeasure('procesarVenta');
         }
-    }
-
-    mostrarProductos(productos) {
-        const grid = document.getElementById('productosGrid');
-        if (!grid) return;
-        
-        if (productos.length === 0) {
-            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--gray);">No hay productos disponibles</div>';
-            return;
-        }
-        
-        const fragment = document.createDocumentFragment();
-        
-        productos.forEach(producto => {
-            const card = document.createElement('div');
-            card.className = 'producto-card';
-            card.dataset.id = producto.id;
-            card.tabIndex = 0;
-            card.role = 'button';
-            
-            let stockClass = 'stock';
-            let stockText = `${producto.stock_actual} disponibles`;
-            
-            if (producto.stock_actual <= 0) {
-                stockClass += ' stock-agotado';
-                stockText = '❌ AGOTADO';
-            } else if (producto.stock_actual <= producto.stock_minimo) {
-                stockClass += ' stock-bajo';
-                stockText = `⚠️ Quedan ${producto.stock_actual}`;
-            }
-            
-            card.innerHTML = `
-                <h3>${this.escapeHTML(producto.nombre)}</h3>
-                <div class="precio">$${parseFloat(producto.precio_venta).toFixed(2)}</div>
-                <div class="${stockClass}">
-                    <i class="fas fa-box"></i> ${stockText}
-                </div>
-                <small>${this.escapeHTML(producto.descripcion || '')}</small>
-            `;
-            
-            if (producto.stock_actual <= 0) {
-                card.style.opacity = '0.5';
-                card.style.cursor = 'not-allowed';
-                card.title = 'Producto sin stock';
-            }
-            
-            fragment.appendChild(card);
-        });
-        
-        grid.innerHTML = '';
-        grid.appendChild(fragment);
-        
-        grid.querySelectorAll('.producto-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const id = card.dataset.id;
-                const producto = productos.find(p => p.id == id);
-                
-                if (producto && producto.stock_actual <= 0) {
-                    this.mostrarNotificacion('❌ No hay stock disponible de este producto', 'error');
-                    return;
-                }
-                
-                if (id) this.agregarAlCarrito(parseInt(id));
-            });
-            
-            card.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    const id = card.dataset.id;
-                    const producto = productos.find(p => p.id == id);
-                    
-                    if (producto && producto.stock_actual <= 0) {
-                        this.mostrarNotificacion('❌ No hay stock disponible de este producto', 'error');
-                        return;
-                    }
-                    
-                    if (id) this.agregarAlCarrito(parseInt(id));
-                }
-            });
-            
-            card.addEventListener('touchstart', () => {
-                card.style.transform = 'scale(0.98)';
-            }, { passive: true });
-            
-            card.addEventListener('touchend', () => {
-                card.style.transform = '';
-            }, { passive: true });
-        });
-    }
-
-    renderizarCarrito(data) {
-        const container = document.getElementById('carritoItems');
-        if (!container) return;
-        
-        if (data.items.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 2rem; color: var(--gray);">
-                    <i class="fas fa-shopping-cart" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;"></i>
-                    <p>Carrito vacío</p>
-                    <p style="font-size: 0.9rem; margin-top: 0.5rem;">Agregue productos para comenzar</p>
-                </div>
-            `;
-            
-            const btnVaciar = document.querySelector('.btn-vaciar-carrito');
-            if (btnVaciar) btnVaciar.style.display = 'none';
-        } else {
-            const fragment = document.createDocumentFragment();
-            
-            data.items.forEach(item => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'carrito-item';
-                
-                itemDiv.innerHTML = `
-                    <div class="item-info">
-                        <h4>${this.escapeHTML(item.nombre)}</h4>
-                        <p>${this.escapeHTML(item.descripcion || '')}</p>
-                        <div class="cantidad-control">
-                            <button onclick="pos.modificarCantidad(${item.id}, ${item.cantidad - 1})" 
-                                    ${item.cantidad <= 1 ? 'disabled' : ''}
-                                    aria-label="Disminuir cantidad">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <input type="number" value="${item.cantidad}" min="1" max="${item.stock}" 
-                                   onchange="pos.modificarCantidad(${item.id}, parseInt(this.value) || 1)"
-                                   aria-label="Cantidad">
-                            <button onclick="pos.modificarCantidad(${item.id}, ${item.cantidad + 1})" 
-                                    ${item.cantidad >= item.stock ? 'disabled' : ''}
-                                    aria-label="Aumentar cantidad">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="item-precio">
-                        <div class="precio">$${parseFloat(item.precio).toFixed(2)}</div>
-                        <small>$${parseFloat(item.subtotal).toFixed(2)}</small>
-                        <button onclick="pos.eliminarDelCarrito(${item.id})" 
-                                style="background: none; border: none; color: var(--danger); cursor: pointer; margin-top: 0.3rem;"
-                                aria-label="Eliminar producto">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                `;
-                
-                fragment.appendChild(itemDiv);
-            });
-            
-            container.innerHTML = '';
-            container.appendChild(fragment);
-            
-            const btnVaciar = document.querySelector('.btn-vaciar-carrito');
-            if (btnVaciar) btnVaciar.style.display = 'flex';
-        }
-        
-        document.getElementById('subtotal').textContent = `$${parseFloat(data.subtotal).toFixed(2)}`;
-        document.getElementById('total').textContent = `$${parseFloat(data.total).toFixed(2)}`;
-        
-        const btnProcesar = document.getElementById('btnProcesar');
-        if (btnProcesar) {
-            btnProcesar.disabled = data.items.length === 0;
-        }
-        
-        this.calcularCambio();
     }
 
     cargarEventos() {
@@ -1110,9 +1098,11 @@ class POSSystem {
                 
                 document.querySelectorAll('.metodo-pago-btn').forEach(b => {
                     b.classList.remove('active');
+                    b.setAttribute('aria-checked', 'false');
                 });
                 
                 e.currentTarget.classList.add('active');
+                e.currentTarget.setAttribute('aria-checked', 'true');
                 this.metodoPagoActivo = metodo;
                 
                 const efectivoSection = document.getElementById('efectivoSection');
@@ -1157,7 +1147,8 @@ class POSSystem {
         
         const btnVaciar = document.createElement('button');
         btnVaciar.className = 'btn-vaciar-carrito';
-        btnVaciar.innerHTML = '<i class="fas fa-trash-alt"></i> Vaciar';
+        btnVaciar.innerHTML = '<i class="fas fa-trash-alt" aria-hidden="true"></i> Vaciar';
+        btnVaciar.setAttribute('aria-label', 'Vaciar carrito completo');
         
         const carritoHeader = document.querySelector('.carrito-header');
         if (carritoHeader) {
@@ -1176,12 +1167,31 @@ class POSSystem {
         this.initResponsive();
     }
 
+    async buscarPorCodigo(termino) {
+        if (!termino || this.cargando) return;
+        
+        try {
+            const response = await fetch(this.apiUrl + '?accion=buscarPorCodigo&codigo=' + encodeURIComponent(termino));
+            const producto = await response.json();
+            
+            if (producto && producto.id) {
+                await this.agregarAlCarrito(producto.id, 1);
+            } else {
+                await this.buscarSugerencias(termino);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            this.mostrarNotificacion('Error en la búsqueda: ' + error.message, 'error');
+        }
+    }
+
     initResponsive() {
         document.querySelectorAll('.toggle-carrito-mobile, .toggle-menu-mobile').forEach(el => el.remove());
         
         const toggleCarrito = document.createElement('button');
         toggleCarrito.className = 'toggle-carrito-mobile';
-        toggleCarrito.innerHTML = '<i class="fas fa-shopping-cart"></i> <span>Ver Carrito</span>';
+        toggleCarrito.innerHTML = '<i class="fas fa-shopping-cart" aria-hidden="true"></i> <span>Ver Carrito</span>';
+        toggleCarrito.setAttribute('aria-label', 'Abrir carrito de compras');
         document.body.appendChild(toggleCarrito);
         
         toggleCarrito.addEventListener('click', () => {
@@ -1190,7 +1200,8 @@ class POSSystem {
         
         const toggleMenu = document.createElement('button');
         toggleMenu.className = 'toggle-menu-mobile';
-        toggleMenu.innerHTML = '<i class="fas fa-bars"></i> <span>Menú</span>';
+        toggleMenu.innerHTML = '<i class="fas fa-bars" aria-hidden="true"></i> <span>Menú</span>';
+        toggleMenu.setAttribute('aria-label', 'Abrir menú');
         document.body.appendChild(toggleMenu);
         
         toggleMenu.addEventListener('click', () => {
@@ -1220,7 +1231,6 @@ class POSSystem {
     agregarRippleEffect() {
         document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
             button.addEventListener('click', function(e) {
-                
                 if (getComputedStyle(this).position !== 'relative') {
                     this.style.position = 'relative';
                     this.style.overflow = 'hidden';
@@ -1249,7 +1259,7 @@ class POSSystem {
                 ripple.style.left = x + 'px';
                 ripple.style.top = y + 'px';
                 
-                ripple.offsetHeight; 
+                ripple.offsetHeight;
                 
                 ripple.style.transform = 'scale(4)';
                 ripple.style.opacity = '0';
@@ -1429,7 +1439,7 @@ class POSSystem {
         };
         
         const btnImprimir = document.createElement('button');
-        btnImprimir.innerHTML = '<i class="fas fa-print"></i> Imprimir';
+        btnImprimir.innerHTML = '<i class="fas fa-print" aria-hidden="true"></i> Imprimir';
         btnImprimir.style.cssText = `
             margin-top: 1rem;
             padding: 0.8rem;
@@ -1445,6 +1455,7 @@ class POSSystem {
             justify-content: center;
             gap: 0.5rem;
         `;
+        btnImprimir.setAttribute('aria-label', 'Imprimir ticket');
         
         btnImprimir.onclick = () => {
             window.print();
@@ -1456,6 +1467,8 @@ class POSSystem {
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
         notificacion.className = `notificacion notificacion-${tipo}`;
+        notificacion.setAttribute('role', 'alert');
+        notificacion.setAttribute('aria-live', 'assertive');
         
         let icono = '';
         if (tipo === 'success') icono = 'fa-check-circle';
@@ -1463,10 +1476,10 @@ class POSSystem {
         else if (tipo === 'warning') icono = 'fa-exclamation-triangle';
         
         notificacion.innerHTML = `
-            <i class="fas ${icono}"></i>
+            <i class="fas ${icono}" aria-hidden="true"></i>
             <span style="flex: 1;">${mensaje}</span>
-            <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; opacity: 0.7; margin-left: 0.5rem;">
-                <i class="fas fa-times"></i>
+            <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; opacity: 0.7; margin-left: 0.5rem;" aria-label="Cerrar notificación">
+                <i class="fas fa-times" aria-hidden="true"></i>
             </button>
         `;
         
@@ -1509,61 +1522,13 @@ class POSSystem {
             }
         }, 2000);
     }
-}
 
-class PerformanceOptimizer {
-    constructor() {
-        this.init();
-    }
-    
-    init() {
-        this.initLazyLoading();
-        this.initMemoryManagement();
-        this.initScrollOptimization();
-    }
-    
-    initLazyLoading() {
-        if ('IntersectionObserver' in window) {
-            const imageObserver = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        if (img.dataset.src) {
-                            img.src = img.dataset.src;
-                            imageObserver.unobserve(img);
-                        }
-                    }
-                });
-            });
-            
-            document.querySelectorAll('img[data-src]').forEach(img => {
-                imageObserver.observe(img);
-            });
+    destroy() {
+        if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
         }
-    }
-    
-    initMemoryManagement() {
-        window.addEventListener('beforeunload', () => {
-            if (window.pos) {
-                window.pos = null;
-            }
-            if (window.moduloCaja) {
-                window.moduloCaja = null;
-            }
-        });
-    }
-    
-    initScrollOptimization() {
-        let ticking = false;
-        
-        window.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        }, { passive: true });
+        this.cache.clear();
     }
 }
 
@@ -1571,17 +1536,14 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.pos = new POSSystem();
         window.pos.init();
-        window.performanceOptimizer = new PerformanceOptimizer();
     });
 } else {
     window.pos = new POSSystem();
     window.pos.init();
-    window.performanceOptimizer = new PerformanceOptimizer();
 }
 
-setTimeout(() => {
-    const menuActivo = document.querySelector('.menu-item.active');
-    if (menuActivo && menuActivo.dataset.modulo === 'caja' && window.moduloCaja) {
-        window.moduloCaja.mostrarModulo();
+window.addEventListener('beforeunload', () => {
+    if (window.pos) {
+        window.pos.destroy();
     }
-}, 600);
+});
