@@ -8,7 +8,7 @@ class Productos {
         
         $codigo = substr($codigo, 0, 50);
         
-        $stmt = $conn->prepare("SELECT * FROM productos WHERE codigo_barras = ?");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE codigo_barras = ?");
         $stmt->bind_param("s", $codigo);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -30,7 +30,7 @@ class Productos {
         
         $termino_like = "%$termino%";
         
-        $stmt = $conn->prepare("SELECT * FROM productos WHERE 
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE 
                 nombre LIKE ? OR 
                 codigo_barras LIKE ? OR
                 descripcion LIKE ?
@@ -60,10 +60,10 @@ class Productos {
         }
         
         if ($categoria === 'Todas') {
-            $stmt = $conn->prepare("SELECT * FROM productos ORDER BY nombre");
+            $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos ORDER BY nombre");
             $stmt->execute();
         } else {
-            $stmt = $conn->prepare("SELECT * FROM productos WHERE categoria = ? ORDER BY nombre");
+            $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE categoria = ? ORDER BY nombre");
             $stmt->bind_param("s", $categoria);
             $stmt->execute();
         }
@@ -81,7 +81,7 @@ class Productos {
     public function todos() {
         global $conn;
         
-        $stmt = $conn->prepare("SELECT * FROM productos ORDER BY nombre");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos ORDER BY nombre");
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -101,7 +101,7 @@ class Productos {
             return null;
         }
         
-        $stmt = $conn->prepare("SELECT * FROM productos WHERE id = ?");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -118,7 +118,7 @@ class Productos {
     public function stockBajo() {
         global $conn;
         
-        $stmt = $conn->prepare("SELECT * FROM productos WHERE stock_actual <= stock_minimo ORDER BY stock_actual ASC");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE stock_actual <= stock_minimo ORDER BY stock_actual ASC");
         $stmt->execute();
         $result = $stmt->get_result();
         

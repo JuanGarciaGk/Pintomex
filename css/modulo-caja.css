@@ -1,4 +1,4 @@
-/* Estilos responsivos para el módulo de caja */
+/* modulo-caja.css */
 .modulo-caja {
     padding: clamp(1rem, 3vw, 1.5rem);
     max-width: 1400px;
@@ -39,7 +39,51 @@
     white-space: nowrap;
 }
 
-/* Grid responsivo para resumen */
+.estado-caja.abierta {
+    background: rgba(39, 174, 96, 0.1);
+    color: var(--success);
+}
+
+.estado-caja.cerrada {
+    background: rgba(100, 116, 139, 0.1);
+    color: var(--gray);
+}
+
+.btn-toggle-montos {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-toggle-montos:hover {
+    transform: scale(1.1);
+    background: var(--secondary);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-toggle-montos:active {
+    transform: scale(0.95);
+}
+
+.montos-ocultos {
+    letter-spacing: 2px;
+    font-family: monospace;
+    font-size: 1.3em;
+}
+
+.monto-value {
+    transition: all 0.2s ease;
+}
+
 .caja-resumen {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
@@ -83,7 +127,6 @@
     font-size: clamp(0.8rem, 2.2vw, 0.9rem);
 }
 
-/* Acciones responsivas */
 .caja-acciones {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
@@ -130,7 +173,6 @@
     font-size: clamp(0.85rem, 2.5vw, 0.95rem);
 }
 
-/* Modal responsivo */
 .modal-caja {
     max-width: min(500px, 95%);
 }
@@ -159,47 +201,90 @@
     appearance: none;
 }
 
-/* Tabla responsiva */
+.modal-caja input:focus,
+.modal-caja textarea:focus {
+    outline: none;
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.2);
+}
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1rem 0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
 .tabla-historial {
     width: 100%;
     border-collapse: collapse;
     background: white;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: var(--shadow-md);
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin-bottom: 1rem;
-}
-
-.tabla-historial thead {
-    background: var(--primary);
-    color: white;
+    min-width: 800px;
 }
 
 .tabla-historial th {
-    padding: clamp(0.8rem, 2vw, 1rem);
+    background: var(--primary);
+    color: white;
+    padding: 1rem;
     text-align: left;
     font-weight: 600;
-    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+    font-size: 0.9rem;
     white-space: nowrap;
 }
 
 .tabla-historial td {
-    padding: clamp(0.8rem, 2vw, 1rem);
+    padding: 1rem;
     border-bottom: 1px solid var(--light);
-    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
-    white-space: nowrap;
+    font-size: 0.9rem;
+    vertical-align: middle;
 }
 
-/* Colores responsivos */
-.diferencia-positiva { color: var(--success); }
-.diferencia-negativa { color: var(--danger); }
-.diferencia-cero { color: var(--gray); }
+.tabla-historial tr:hover {
+    background: rgba(230, 126, 34, 0.05);
+}
 
-/* Media queries específicos */
+.btn-ver-detalle {
+    background: var(--primary);
+    color: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-ver-detalle:hover {
+    background: var(--secondary) !important;
+    transform: translateY(-2px);
+}
+
+.diferencia-positiva {
+    color: var(--success);
+    font-weight: bold;
+}
+
+.diferencia-negativa {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+.diferencia-cero {
+    color: var(--gray);
+    font-weight: bold;
+}
+
 @media (max-width: 768px) {
+    .btn-toggle-montos {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .btn-toggle-montos i {
+        font-size: 0.9rem;
+    }
+    
     .caja-header {
         flex-direction: column;
         align-items: flex-start;
@@ -272,7 +357,6 @@
     }
 }
 
-/* Orientación horizontal */
 @media (max-width: 768px) and (orientation: landscape) {
     .caja-resumen {
         grid-template-columns: repeat(2, 1fr);

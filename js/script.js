@@ -456,11 +456,15 @@ class POSSystem {
         this.mostrarCargando(true);
         
         try {
-            const data = await this.cachedFetch(this.apiUrl + '?accion=getProductos', {}, 300000);
+            const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+            const response = await fetch(url);
+            const data = await response.json();
+            
             this.productos = data;
             
             requestAnimationFrame(() => {
                 this.mostrarProductos(this.productos);
+                this.mostrarNotificacion('📦 Stock actualizado', 'success');
             });
             
         } catch (error) {
@@ -580,7 +584,7 @@ class POSSystem {
                 item.dataset.id = producto.id;
                 item.tabIndex = 0;
                 item.role = 'option';
-                item.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio_venta).toFixed(2)}`);
+                item.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio).toFixed(2)}`);
                 
                 item.innerHTML = `
                     <div class="sugerencia-info">
@@ -593,7 +597,7 @@ class POSSystem {
                             <i class="fas fa-box" aria-hidden="true"></i> Stock: ${producto.stock_actual}
                         </div>
                     </div>
-                    <div class="sugerencia-precio">$${parseFloat(producto.precio_venta).toFixed(2)}</div>
+                    <div class="sugerencia-precio">$${parseFloat(producto.precio).toFixed(2)}</div>
                 `;
                 
                 fragment.appendChild(item);
@@ -757,7 +761,7 @@ class POSSystem {
             card.dataset.id = producto.id;
             card.tabIndex = 0;
             card.role = 'button';
-            card.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio_venta).toFixed(2)} - Stock: ${producto.stock_actual}`);
+            card.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio).toFixed(2)} - Stock: ${producto.stock_actual}`);
             
             let stockClass = 'stock';
             let stockText = `${producto.stock_actual} disponibles`;
@@ -775,7 +779,7 @@ class POSSystem {
             
             card.innerHTML = `
                 <h3>${this.escapeHTML(producto.nombre)}</h3>
-                <div class="precio">$${parseFloat(producto.precio_venta).toFixed(2)}</div>
+                <div class="precio">$${parseFloat(producto.precio).toFixed(2)}</div>
                 <div class="${stockClass}">
                     <i class="fas fa-box" aria-hidden="true"></i> ${stockText}
                 </div>
@@ -823,7 +827,10 @@ class POSSystem {
         const container = document.getElementById('carritoItems');
         if (!container) return;
         
-        if (data.items.length === 0) {
+        const subtotal = parseFloat(data.subtotal) || 0;
+        const total = parseFloat(data.total) || 0;
+        
+        if (!data.items || data.items.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 2rem; color: var(--gray);">
                     <i class="fas fa-shopping-cart" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;" aria-hidden="true"></i>
@@ -834,6 +841,19 @@ class POSSystem {
             
             const btnVaciar = document.querySelector('.btn-vaciar-carrito');
             if (btnVaciar) btnVaciar.style.display = 'none';
+            
+            const subtotalSpan = document.getElementById('subtotal');
+            if (subtotalSpan) subtotalSpan.textContent = '$0.00';
+            
+            const totalSpan = document.getElementById('total');
+            if (totalSpan) totalSpan.textContent = '$0.00';
+            
+            const btnProcesar = document.getElementById('btnProcesar');
+            if (btnProcesar) {
+                btnProcesar.disabled = true;
+                btnProcesar.setAttribute('aria-disabled', 'true');
+            }
+            
             return;
         }
         
@@ -872,46 +892,44 @@ class POSSystem {
         container.innerHTML = '';
         container.appendChild(fragment);
         
-        container.addEventListener('click', (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            
-            const id = parseInt(btn.dataset.id);
-            if (btn.classList.contains('btn-decrement')) {
-                this.modificarCantidad(id, parseInt(btn.dataset.cantidad));
-            } else if (btn.classList.contains('btn-increment')) {
-                this.modificarCantidad(id, parseInt(btn.dataset.cantidad));
-            } else if (btn.classList.contains('btn-eliminar')) {
-                this.eliminarDelCarrito(id);
-            }
-        });
+        const subtotalSpan = document.getElementById('subtotal');
+        if (subtotalSpan) subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
         
-        container.addEventListener('change', (e) => {
-            const input = e.target.closest('.cantidad-input');
-            if (input) {
-                const id = parseInt(input.dataset.id);
-                const cantidad = parseInt(input.value) || 1;
-                this.modificarCantidad(id, cantidad);
-            }
-        });
-        
-        document.getElementById('subtotal').textContent = `$${parseFloat(data.subtotal).toFixed(2)}`;
-        document.getElementById('total').textContent = `$${parseFloat(data.total).toFixed(2)}`;
+        const totalSpan = document.getElementById('total');
+        if (totalSpan) totalSpan.textContent = `$${total.toFixed(2)}`;
         
         const btnProcesar = document.getElementById('btnProcesar');
         if (btnProcesar) {
-            btnProcesar.disabled = data.items.length === 0;
-            if (data.items.length === 0) {
-                btnProcesar.setAttribute('aria-disabled', 'true');
-            } else {
-                btnProcesar.setAttribute('aria-disabled', 'false');
-            }
+            btnProcesar.disabled = false;
+            btnProcesar.setAttribute('aria-disabled', 'false');
         }
         
         const btnVaciar = document.querySelector('.btn-vaciar-carrito');
         if (btnVaciar) btnVaciar.style.display = 'flex';
         
         this.calcularCambio();
+        
+        container.querySelectorAll('.btn-decrement, .btn-increment, .btn-eliminar').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.dataset.id);
+                if (btn.classList.contains('btn-decrement')) {
+                    this.modificarCantidad(id, parseInt(btn.dataset.cantidad));
+                } else if (btn.classList.contains('btn-increment')) {
+                    this.modificarCantidad(id, parseInt(btn.dataset.cantidad));
+                } else if (btn.classList.contains('btn-eliminar')) {
+                    this.eliminarDelCarrito(id);
+                }
+            });
+        });
+        
+        container.querySelectorAll('.cantidad-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const id = parseInt(input.dataset.id);
+                const cantidad = parseInt(input.value) || 1;
+                this.modificarCantidad(id, cantidad);
+            });
+        });
     }
 
     async procesarVenta() {
@@ -995,12 +1013,7 @@ class POSSystem {
                 const venta = {
                     folio: data.folio,
                     fecha: new Date().toLocaleString(),
-                    items: this.carrito.map(item => ({
-                        nombre: item.nombre,
-                        cantidad: item.cantidad,
-                        precio: parseFloat(item.precio),
-                        subtotal: parseFloat(item.subtotal)
-                    })),
+                    items: [...this.carrito],
                     subtotal: parseFloat(total),
                     total: parseFloat(total),
                     metodo_pago: this.metodoPagoActivo,
@@ -1024,21 +1037,61 @@ class POSSystem {
                     this.mostrarNotificacion(`✅ Venta procesada con ${this.metodoPagoActivo}`, 'success');
                 }
                 
-                setTimeout(() => {
-                    this.cargarProductosDesdeBD();
-                }, 100);
+                const cacheKey = this.apiUrl + '?accion=getProductos';
+                this.cache.delete(cacheKey);
+                
+                await this.cargarProductosDesdeBD();
                 
                 this.carrito = [];
-                this.renderizarCarrito({ items: [], subtotal: 0, total: 0 });
+                
+                const vaciarFormData = new FormData();
+                vaciarFormData.append('accion', 'vaciarCarrito');
+                await this.postWithCsrf(this.apiUrl, vaciarFormData);
+                
+                const carritoVacio = { items: [], subtotal: 0, total: 0 };
+                this.renderizarCarrito(carritoVacio);
                 
                 this.metodoPagoActivo = null;
                 document.querySelectorAll('.metodo-pago-btn').forEach(b => {
                     b.classList.remove('active');
                     b.setAttribute('aria-checked', 'false');
                 });
-                document.getElementById('efectivoSection').style.display = 'none';
-                if (document.getElementById('efectivoRecibido')) {
-                    document.getElementById('efectivoRecibido').value = '';
+                
+                const efectivoSection = document.getElementById('efectivoSection');
+                if (efectivoSection) {
+                    efectivoSection.style.display = 'none';
+                }
+                
+                const efectivoRecibidoInput = document.getElementById('efectivoRecibido');
+                if (efectivoRecibidoInput) {
+                    efectivoRecibidoInput.value = '';
+                }
+                
+                const cambioSpan = document.getElementById('cambio');
+                if (cambioSpan) {
+                    cambioSpan.textContent = '$0.00';
+                    cambioSpan.style.color = 'var(--gray)';
+                }
+                
+                const subtotalSpan = document.getElementById('subtotal');
+                if (subtotalSpan) {
+                    subtotalSpan.textContent = '$0.00';
+                }
+                
+                const totalSpan = document.getElementById('total');
+                if (totalSpan) {
+                    totalSpan.textContent = '$0.00';
+                }
+                
+                const btnProcesar = document.getElementById('btnProcesar');
+                if (btnProcesar) {
+                    btnProcesar.disabled = true;
+                    btnProcesar.setAttribute('aria-disabled', 'true');
+                }
+                
+                const btnVaciar = document.querySelector('.btn-vaciar-carrito');
+                if (btnVaciar) {
+                    btnVaciar.style.display = 'none';
                 }
                 
                 if (window.moduloCaja) {
@@ -1048,7 +1101,12 @@ class POSSystem {
                     }
                 }
                 
-                document.getElementById('codigoBarras')?.focus();
+                const inputBusqueda = document.getElementById('codigoBarras');
+                if (inputBusqueda) {
+                    inputBusqueda.value = '';
+                    inputBusqueda.focus();
+                }
+                
             } else {
                 this.mostrarNotificacion(`❌ ${data.message || 'Error al procesar venta'}`, 'error');
             }

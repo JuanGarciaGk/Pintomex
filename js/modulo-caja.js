@@ -1,3 +1,5 @@
+// modulo-caja.js - Versión corregida con persistencia del historial
+
 class ModuloCaja {
     constructor() {
         this.apiUrl = 'php/api.php';
@@ -8,10 +10,16 @@ class ModuloCaja {
         this.refreshInterval = null;
         this.isUpdating = false;
         this.modalActual = null;
+        this.montosOcultos = false;
+        this.historialVisible = false;
     }
 
     async init() {
-        console.log('Inicializando módulo de caja...');
+        const savedState = localStorage.getItem('caja_montos_ocultos');
+        if (savedState !== null) {
+            this.montosOcultos = savedState === 'true';
+        }
+        
         await this.verificarEstadoCaja();
         this.cargarEventos();
         
@@ -38,6 +46,57 @@ class ModuloCaja {
                 this.verificarEstadoCaja();
             }
         }, 30000);
+    }
+
+    toggleMontosVisibility() {
+        this.montosOcultos = !this.montosOcultos;
+        localStorage.setItem('caja_montos_ocultos', this.montosOcultos);
+        
+        const montosElements = document.querySelectorAll('.monto-value');
+        const toggleIcon = document.getElementById('toggleMontosIcon');
+        const toggleBtn = document.getElementById('btnToggleMontos');
+        
+        montosElements.forEach(element => {
+            if (this.montosOcultos) {
+                if (!element.dataset.realValue && element.textContent) {
+                    element.dataset.realValue = element.textContent;
+                }
+                element.textContent = '******';
+                element.classList.add('montos-ocultos');
+            } else {
+                if (element.dataset.realValue) {
+                    element.textContent = element.dataset.realValue;
+                }
+                element.classList.remove('montos-ocultos');
+            }
+        });
+        
+        if (toggleIcon) {
+            toggleIcon.className = this.montosOcultos ? 'fas fa-eye-slash' : 'fas fa-eye';
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.setAttribute('aria-label', this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos');
+            toggleBtn.setAttribute('title', this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos');
+        }
+    }
+
+    async toggleHistorial() {
+        this.historialVisible = !this.historialVisible;
+        const historialContainer = document.getElementById('historialContainer');
+        
+        if (this.historialVisible) {
+            await this.mostrarHistorial();
+            if (historialContainer) {
+                historialContainer.style.display = 'block';
+                historialContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            if (historialContainer) {
+                historialContainer.style.display = 'none';
+                historialContainer.innerHTML = '';
+            }
+        }
     }
 
     async obtenerCsrfToken() {
@@ -102,6 +161,7 @@ class ModuloCaja {
             const data = await response.json();
             
             if (data.success) {
+                const estabaAbierta = this.cajaAbierta;
                 this.cajaAbierta = data.caja_abierta;
                 this.datosCaja = data.caja_abierta ? data.caja : null;
                 
@@ -115,7 +175,16 @@ class ModuloCaja {
                 }
                 
                 if (document.getElementById('moduloCaja')?.style.display === 'block') {
+                    const estadoHistorialAnterior = this.historialVisible;
                     this.actualizarUI();
+                    if (estadoHistorialAnterior && this.cajaAbierta === estabaAbierta) {
+                        this.historialVisible = true;
+                        await this.mostrarHistorial();
+                        const historialContainer = document.getElementById('historialContainer');
+                        if (historialContainer) {
+                            historialContainer.style.display = 'block';
+                        }
+                    }
                 }
             }
         } catch (error) {
@@ -129,14 +198,26 @@ class ModuloCaja {
         const contenedor = document.getElementById('moduloCajaContent');
         if (!contenedor) return;
 
+        const estadoHistorial = this.historialVisible;
+        
         requestAnimationFrame(() => {
             if (this.cajaAbierta) {
                 contenedor.innerHTML = this.renderCajaAbierta();
             } else {
                 contenedor.innerHTML = this.renderCajaCerrada();
+                this.historialVisible = false;
             }
             this.cargarEventosInternos();
-            this.mostrarHistorial();
+            
+            const historialContainer = document.getElementById('historialContainer');
+            if (historialContainer) {
+                if (estadoHistorial && this.cajaAbierta) {
+                    historialContainer.style.display = 'block';
+                    this.mostrarHistorial();
+                } else {
+                    historialContainer.style.display = 'none';
+                }
+            }
         });
     }
 
@@ -173,7 +254,7 @@ class ModuloCaja {
                     </div>
                 </div>
                 
-                <div id="historialContainer"></div>
+                <div id="historialContainer" style="display: none;"></div>
             </div>
         `;
     }
@@ -188,6 +269,11 @@ class ModuloCaja {
         const esperado = montoInicial + totalVentasEfectivo - totalGastos;
         const fechaApertura = this.datosCaja?.fecha_apertura ? new Date(this.datosCaja.fecha_apertura).toLocaleString() : '';
 
+        const mostrarMontoInicial = this.montosOcultos ? '******' : `$${montoInicial.toFixed(2)}`;
+        const mostrarVentasEfectivo = this.montosOcultos ? '******' : `$${totalVentasEfectivo.toFixed(2)}`;
+        const mostrarVentasElectronico = this.montosOcultos ? '******' : `$${totalElectronico.toFixed(2)}`;
+        const mostrarTotalEsperado = this.montosOcultos ? '******' : `$${esperado.toFixed(2)}`;
+
         return `
             <div class="modulo-caja">
                 <div class="caja-header">
@@ -195,9 +281,17 @@ class ModuloCaja {
                         <i class="fas fa-cash-register" style="color: var(--secondary);"></i> 
                         Módulo de Caja
                     </h2>
-                    <div class="estado-caja abierta">
-                        <i class="fas fa-check-circle"></i> 
-                        Caja Abierta
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <button class="btn-toggle-montos" id="btnToggleMontos" 
+                                style="background: var(--primary); color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);"
+                                aria-label="${this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos'}" 
+                                title="${this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos'}">
+                            <i id="toggleMontosIcon" class="fas ${this.montosOcultos ? 'fa-eye-slash' : 'fa-eye'}"></i>
+                        </button>
+                        <div class="estado-caja abierta">
+                            <i class="fas fa-check-circle"></i> 
+                            Caja Abierta
+                        </div>
                     </div>
                 </div>
                 
@@ -220,7 +314,7 @@ class ModuloCaja {
                             </div>
                             <h3 style="margin: 0;">Monto Inicial</h3>
                         </div>
-                        <div class="cantidad">$${montoInicial.toFixed(2)}</div>
+                        <div class="cantidad monto-value" data-real-value="$${montoInicial.toFixed(2)}">${mostrarMontoInicial}</div>
                     </div>
                     
                     <div class="resumen-card">
@@ -230,7 +324,7 @@ class ModuloCaja {
                             </div>
                             <h3 style="margin: 0;">Ventas Efectivo</h3>
                         </div>
-                        <div class="cantidad" style="color: var(--success);">$${totalVentasEfectivo.toFixed(2)}</div>
+                        <div class="cantidad monto-value" data-real-value="$${totalVentasEfectivo.toFixed(2)}">${mostrarVentasEfectivo}</div>
                         <div class="subtexto">${ventasEfectivo} transacciones</div>
                     </div>
                     
@@ -241,7 +335,7 @@ class ModuloCaja {
                             </div>
                             <h3 style="margin: 0;">Ventas Electrónicas</h3>
                         </div>
-                        <div class="cantidad" style="color: #3498db;">$${totalElectronico.toFixed(2)}</div>
+                        <div class="cantidad monto-value" data-real-value="$${totalElectronico.toFixed(2)}">${mostrarVentasElectronico}</div>
                         <div class="subtexto">Tarjeta/Transferencia</div>
                     </div>
                     
@@ -252,7 +346,7 @@ class ModuloCaja {
                             </div>
                             <h3 style="margin: 0;">Gastos del Día</h3>
                         </div>
-                        <div class="cantidad" style="color: #e67e22;">-$${totalGastos.toFixed(2)}</div>
+                        <div class="cantidad">-$${totalGastos.toFixed(2)}</div>
                         <div class="subtexto">Egresos registrados</div>
                     </div>
                     
@@ -263,7 +357,7 @@ class ModuloCaja {
                             </div>
                             <h3 style="margin: 0; color: white;">Total en Caja</h3>
                         </div>
-                        <div class="cantidad" style="color: white;">$${esperado.toFixed(2)}</div>
+                        <div class="cantidad monto-value" style="color: white;" data-real-value="$${esperado.toFixed(2)}">${mostrarTotalEsperado}</div>
                         <div class="subtexto" style="color: rgba(255,255,255,0.8);">Inicial + Efectivo - Gastos</div>
                     </div>
                 </div>
@@ -281,12 +375,12 @@ class ModuloCaja {
                     </div>
                     <div class="accion-card" data-accion="historial">
                         <i class="fas fa-history"></i>
-                        <h4>Historial</h4>
-                        <p>Ver cortes anteriores</p>
+                        <h4>Historial de Cortes</h4>
+                        <p>Ver cortes de caja anteriores</p>
                     </div>
                 </div>
                 
-                <div id="historialContainer"></div>
+                <div id="historialContainer" style="display: none;"></div>
             </div>
         `;
     }
@@ -294,6 +388,14 @@ class ModuloCaja {
     cargarEventosInternos() {
         const contenedor = document.getElementById('moduloCajaContent');
         if (!contenedor) return;
+        
+        const toggleBtn = document.getElementById('btnToggleMontos');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleMontosVisibility();
+            });
+        }
         
         contenedor.querySelectorAll('.accion-card').forEach(card => {
             card.addEventListener('click', (e) => {
@@ -305,7 +407,7 @@ class ModuloCaja {
                 } else if (accion === 'gasto') {
                     this.mostrarModalGasto();
                 } else if (accion === 'historial') {
-                    this.mostrarHistorial();
+                    this.toggleHistorial();
                 }
             });
         });
@@ -779,12 +881,17 @@ class ModuloCaja {
             if (data.success) {
                 container.innerHTML = `
                     <div style="margin: 2rem 0 1rem;">
-                        <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fas fa-history"></i> Historial de Cortes
-                            <span style="background: var(--secondary); color: white; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.9rem; margin-left: 1rem;">
-                                ${data.historial.length} registros
-                            </span>
-                        </h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-history"></i> Historial de Cortes
+                                <span style="background: var(--secondary); color: white; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.9rem; margin-left: 1rem;">
+                                    ${data.historial.length} registros
+                                </span>
+                            </h3>
+                            <button class="btn-cerrar-historial" style="background: var(--danger); color: white; border: none; border-radius: var(--radius-md); padding: 0.5rem 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-times"></i> Cerrar
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="table-responsive">
@@ -851,6 +958,13 @@ class ModuloCaja {
                 
                 this.agregarEstilosHistorial();
                 
+                const btnCerrarHistorial = container.querySelector('.btn-cerrar-historial');
+                if (btnCerrarHistorial) {
+                    btnCerrarHistorial.addEventListener('click', () => {
+                        this.toggleHistorial();
+                    });
+                }
+                
                 container.querySelectorAll('.btn-ver-detalle').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const id = parseInt(btn.dataset.id);
@@ -908,6 +1022,11 @@ class ModuloCaja {
             
             .btn-ver-detalle:hover {
                 background: var(--secondary) !important;
+                transform: translateY(-2px);
+            }
+            
+            .btn-cerrar-historial:hover {
+                background: #a04545 !important;
                 transform: translateY(-2px);
             }
             
@@ -1089,8 +1208,6 @@ class ModuloCaja {
     }
 
     mostrarModulo() {
-        console.log('Mostrando módulo de caja');
-        
         document.querySelectorAll('.contenido-principal > section').forEach(s => {
             s.style.display = 'none';
         });
@@ -1105,6 +1222,7 @@ class ModuloCaja {
         }
         
         moduloCaja.style.display = 'block';
+        this.historialVisible = false;
         this.actualizarUI();
     }
 
@@ -1162,7 +1280,6 @@ class ModuloCaja {
     }
 }
 
-// Inicialización
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.moduloCaja = new ModuloCaja();

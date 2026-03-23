@@ -7,7 +7,6 @@ class Carrito {
     public function agregar($producto_id, $cantidad = 1) {
         global $conn;
         
-        // Validaciones más estrictas
         $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
         $cantidad = filter_var($cantidad, FILTER_VALIDATE_INT);
         
@@ -19,7 +18,6 @@ class Carrito {
             return ['success' => false, 'message' => 'Cantidad inválida'];
         }
         
-        // Límite máximo de cantidad por producto
         $MAX_CANTIDAD = 999;
         if ($cantidad > $MAX_CANTIDAD) {
             return ['success' => false, 'message' => "Cantidad máxima permitida es $MAX_CANTIDAD"];
@@ -38,14 +36,8 @@ class Carrito {
         $producto = $result->fetch_assoc();
         $stmt->close();
         
-        // Verificar stock
         if ($producto['stock_actual'] < $cantidad) {
             return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
-        }
-        
-        // Verificar límite por carrito (máximo 50 productos diferentes)
-        if (isset($_SESSION['carrito']) && count($_SESSION['carrito']) >= 50 && !isset($_SESSION['carrito'][$producto_id])) {
-            return ['success' => false, 'message' => 'Máximo 50 productos diferentes por venta'];
         }
         
         if (!isset($_SESSION['carrito'][$producto_id])) {
@@ -54,19 +46,17 @@ class Carrito {
                 'codigo' => $producto['codigo_barras'],
                 'nombre' => $producto['nombre'],
                 'descripcion' => $producto['descripcion'],
-                'precio' => floatval($producto['precio_venta']),
+                'precio' => floatval($producto['precio']),
                 'cantidad' => $cantidad,
                 'stock' => intval($producto['stock_actual'])
             ];
         } else {
             $nueva_cantidad = $_SESSION['carrito'][$producto_id]['cantidad'] + $cantidad;
             
-            // Verificar stock con la nueva cantidad
             if ($nueva_cantidad > $producto['stock_actual']) {
                 return ['success' => false, 'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual']];
             }
             
-            // Verificar límite por producto (máximo 99 unidades por producto)
             $MAX_POR_PRODUCTO = 99;
             if ($nueva_cantidad > $MAX_POR_PRODUCTO) {
                 return ['success' => false, 'message' => "Máximo $MAX_POR_PRODUCTO unidades por producto"];
@@ -88,11 +78,6 @@ class Carrito {
             return $this->obtener();
         }
         
-        // Validar cantidad
-        if ($cantidad === false) {
-            return $this->obtener();
-        }
-        
         $MAX_POR_PRODUCTO = 99;
         if ($cantidad > $MAX_POR_PRODUCTO) {
             return [
@@ -107,7 +92,6 @@ class Carrito {
         }
         
         if (isset($_SESSION['carrito'][$producto_id])) {
-            // Obtener stock actual del producto
             $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
             $stmt->bind_param("i", $producto_id);
             $stmt->execute();
@@ -177,7 +161,6 @@ class Carrito {
             return ['success' => false, 'message' => 'Carrito vacío'];
         }
         
-        // Validar que todos los productos existan y tengan stock suficiente
         foreach ($carrito['items'] as $item) {
             if (!isset($item['id']) || !isset($item['cantidad'])) {
                 return ['success' => false, 'message' => 'Datos de producto inválidos'];
@@ -188,7 +171,6 @@ class Carrito {
             }
         }
         
-        // Validar pago en efectivo
         if ($metodo_pago === 'Efectivo') {
             $efectivo_recibido = filter_var($efectivo_recibido, FILTER_VALIDATE_FLOAT);
             $cambio = filter_var($cambio, FILTER_VALIDATE_FLOAT);
@@ -197,7 +179,6 @@ class Carrito {
                 return ['success' => false, 'message' => 'Cantidad de efectivo inválida'];
             }
             
-            // Validar que el efectivo no sea excesivamente mayor al total
             $MAX_EXCESO = 10000;
             if ($efectivo_recibido - $carrito['total'] > $MAX_EXCESO) {
                 return ['success' => false, 'message' => 'El efectivo recibido excede el total por más de $' . number_format($MAX_EXCESO, 2)];
@@ -211,7 +192,6 @@ class Carrito {
         $conn->begin_transaction();
         
         try {
-            // Bloquear productos para evitar race conditions
             $productos_ids = array_column($carrito['items'], 'id');
             $placeholders = implode(',', array_fill(0, count($productos_ids), '?'));
             $types = str_repeat('i', count($productos_ids));
@@ -226,7 +206,6 @@ class Carrito {
             }
             $stmt->close();
             
-            // Validar stock de todos los productos
             foreach ($carrito['items'] as $item) {
                 if (!isset($productos_stock[$item['id']])) {
                     throw new Exception("Producto no encontrado: {$item['nombre']}");
@@ -239,7 +218,6 @@ class Carrito {
             
             $folio = generarFolio();
             
-            // Validar que el folio no exista ya
             $stmt = $conn->prepare("SELECT id FROM ventas WHERE folio = ?");
             $stmt->bind_param("s", $folio);
             $stmt->execute();
@@ -260,7 +238,6 @@ class Carrito {
             $venta_id = $conn->insert_id;
             $stmt->close();
             
-            // Verificar si hay caja abierta
             $caja_stmt = $conn->prepare("SELECT id FROM cortes_caja WHERE estado = 'abierta' ORDER BY fecha_apertura DESC LIMIT 1");
             $caja_stmt->execute();
             $caja_result = $caja_stmt->get_result();
