@@ -51,6 +51,10 @@ class POSSystem {
                 document.getElementById('codigoBarras')?.focus();
             }, 100);
         }
+        
+        window.addEventListener('productos-actualizados', () => {
+            this.recargarProductos();
+        });
 
         this.endMeasure('init');
     }
@@ -475,6 +479,53 @@ class POSSystem {
             this.endMeasure('cargarProductos');
         }
     }
+
+    async recargarProductos() {
+    try {
+        const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        this.productos = data;
+        
+        const categoriaActivaActual = this.categoriaActiva;
+        const moduloVisible = document.getElementById('seccionPuntoVenta')?.style.display === 'block';
+        
+        if (moduloVisible) {
+            await this.filtrarProductos();
+            this.categoriaActiva = categoriaActivaActual;
+            
+            const filtros = document.querySelectorAll('.filtro-btn');
+            filtros.forEach(btn => {
+                if (btn.textContent === categoriaActivaActual) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+        
+        const carritoActual = this.carrito;
+        if (carritoActual && carritoActual.length > 0) {
+            for (const item of carritoActual) {
+                const productoActualizado = this.productos.find(p => p.id === item.id);
+                if (productoActualizado) {
+                    const cantidadCarrito = item.cantidad;
+                    if (cantidadCarrito > productoActualizado.stock_actual) {
+                        await this.modificarCantidad(item.id, productoActualizado.stock_actual);
+                        this.mostrarNotificacion(`⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`, 'warning');
+                    }
+                }
+            }
+        }
+        
+        if (window.moduloProductos) {
+            window.moduloProductos.cargarProductos();
+        }
+    } catch (error) {
+        console.error('Error recargando productos:', error);
+    }
+}
 
     mostrarCargando(mostrar) {
         const grid = document.getElementById('productosGrid');

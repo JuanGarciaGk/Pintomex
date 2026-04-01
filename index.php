@@ -33,6 +33,9 @@ header('Cache-Control: public, max-age=86400');
     <link rel="preload" href="css/modulo-caja.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/modulo-caja.css"></noscript>
     
+    <link rel="preload" href="css/modulo-productos.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/modulo-productos.css"></noscript>
+    
     <style>
         .escanner-input { position: relative; }
         #codigoBarras {
@@ -112,7 +115,8 @@ header('Cache-Control: public, max-age=86400');
         </aside>
         
         <main class="contenido-principal" id="contenido-principal">
-            <section class="escanner-section" aria-labelledby="escanner-titulo">
+            <!-- Sección de punto de venta (solo visible cuando el módulo está activo) -->
+            <section class="escanner-section" id="seccionPuntoVenta" style="display: block;">
                 <h2 id="escanner-titulo" class="visually-hidden">Buscador de productos</h2>
                 <div class="buscador-container">
                     <div class="escanner-input">
@@ -255,5 +259,6 @@ header('Cache-Control: public, max-age=86400');
     <script src="js/ticket-printer.js" defer></script>
     <script src="js/script.js" defer></script>
     <script src="js/modulo-caja.js" defer></script>
+    <script src="js/modulo-productos.js" defer></script>
 </body>
 </html>
