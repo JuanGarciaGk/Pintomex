@@ -75,6 +75,70 @@ header('Cache-Control: public, max-age=86400');
             outline-offset: 2px;
             border-radius: 4px;
         }
+        
+        /* Estilos para el módulo de cambios */
+        .cambio-header {
+            padding: 1rem;
+            border-bottom: 2px solid var(--light);
+            background: white;
+        }
+        .cambio-header h2 {
+            color: var(--primary);
+            font-size: clamp(1.1rem, 4vw, 1.3rem);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .cambio-header h2 i {
+            color: var(--warning);
+        }
+        .cambio-search {
+            padding: 1rem;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--light);
+        }
+        .cambio-search input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid var(--light);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+        }
+        .cambio-search input:focus {
+            border-color: var(--warning);
+            outline: none;
+        }
+        .venta-seleccionada {
+            padding: 1rem;
+            background: #fff3e0;
+            border-bottom: 1px solid var(--light);
+        }
+        .venta-info {
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            background: white;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--warning);
+        }
+        .producto-original {
+            padding: 0.5rem;
+            background: #fef5e8;
+            border-radius: var(--radius-md);
+            margin-bottom: 1rem;
+        }
+        .producto-cambio {
+            padding: 0.5rem;
+            background: #e8f5e9;
+            border-radius: var(--radius-md);
+        }
+        .btn-cambiar {
+            width: 100%;
+            margin-top: 1rem;
+            background: var(--warning);
+        }
+        .btn-cambiar:hover {
+            background: #e67e22;
+        }
     </style>
 </head>
 <body>
@@ -116,7 +180,7 @@ header('Cache-Control: public, max-age=86400');
         
         <main class="contenido-principal" id="contenido-principal">
             <!-- Sección de punto de venta (solo visible cuando el módulo está activo) -->
-            <section class="escanner-section" id="seccionPuntoVenta" style="display: block;">
+            <section class="escanner-section" id="seccionPuntoVenta" style="display: none;">
                 <h2 id="escanner-titulo" class="visually-hidden">Buscador de productos</h2>
                 <div class="buscador-container">
                     <div class="escanner-input">
@@ -147,72 +211,10 @@ header('Cache-Control: public, max-age=86400');
             </section>
         </main>
         
-        <aside class="carrito-panel" aria-labelledby="carrito-titulo">
-            <div class="carrito-header">
-                <h2 id="carrito-titulo">
-                    <i class="fas fa-shopping-basket" aria-hidden="true"></i>
-                    Carrito de Venta
-                </h2>
-            </div>
-            
-            <div class="carrito-items-container">
-                <div class="carrito-items" id="carritoItems" aria-label="Productos en el carrito" aria-live="polite"></div>
-            </div>
-            
-            <div class="carrito-totales" aria-label="Resumen de la compra">
-                <div class="total-row">
-                    <span>Subtotal:</span>
-                    <span id="subtotal" aria-live="polite">$0.00</span>
-                </div>
-                
-                <div id="efectivoSection" style="display: none;">
-                    <div class="total-row">
-                        <label for="efectivoRecibido">Efectivo recibido:</label>
-                        <span>
-                            <input type="number" 
-                                   id="efectivoRecibido" 
-                                   min="0" 
-                                   step="0.01" 
-                                   placeholder="0.00" 
-                                   aria-label="Cantidad de efectivo recibido"
-                                   style="width: 100px; padding: 0.2rem; border: 1px solid #d1d5db; border-radius: 4px; text-align: right;">
-                        </span>
-                    </div>
-                    <div class="total-row">
-                        <span>Cambio:</span>
-                        <span id="cambio" aria-live="polite">$0.00</span>
-                    </div>
-                </div>
-                
-                <div class="total-row grande">
-                    <span>Total:</span>
-                    <span id="total" aria-live="polite">$0.00</span>
-                </div>
-            </div>
-            
-            <div class="metodos-pago-container">
-                <h3 class="visually-hidden">Métodos de pago</h3>
-                <div class="metodos-pago" role="radiogroup" aria-label="Seleccione método de pago">
-                    <button class="metodo-pago-btn" data-metodo="Efectivo" role="radio" aria-checked="false" aria-label="Pagar con efectivo">
-                        <i class="fas fa-money-bill" aria-hidden="true"></i>
-                        Efectivo
-                    </button>
-                    <button class="metodo-pago-btn" data-metodo="Tarjeta" role="radio" aria-checked="false" aria-label="Pagar con tarjeta">
-                        <i class="fas fa-credit-card" aria-hidden="true"></i>
-                        Tarjeta
-                    </button>
-                    <button class="metodo-pago-btn" data-metodo="Transferencia" role="radio" aria-checked="false" aria-label="Pagar con transferencia">
-                        <i class="fas fa-university" aria-hidden="true"></i>
-                        Transferencia
-                    </button>
-                </div>
-            </div>
-            
-            <div class="btn-procesar-container">
-                <button class="btn-procesar" id="btnProcesar" disabled aria-disabled="true" aria-label="Procesar venta">
-                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                    Procesar Venta
-                </button>
+        <aside class="carrito-panel" id="panelLateral" aria-labelledby="panel-titulo">
+            <!-- El contenido será dinámico según el módulo activo -->
+            <div id="panelContent">
+                <!-- Contenido por defecto (carrito) -->
             </div>
         </aside>
         
@@ -260,5 +262,6 @@ header('Cache-Control: public, max-age=86400');
     <script src="js/script.js" defer></script>
     <script src="js/modulo-caja.js" defer></script>
     <script src="js/modulo-productos.js" defer></script>
+    <script src="js/modulo-cambios.js" defer></script>
 </body>
 </html>
