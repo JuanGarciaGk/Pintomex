@@ -23,7 +23,7 @@ require_once 'config.php';
 require_once 'productos.php';
 require_once 'carrito.php';
 require_once 'caja.php';
-require_once 'productos_admin.php'; // Asegurar que existe este archivo
+require_once 'productos_admin.php';
 
 // Headers de caché optimizados
 header('Content-Type: application/json');
@@ -54,7 +54,8 @@ $acciones_sin_csrf = [
     'buscarPorCodigo', 'getCarrito', 'getEstadoCaja', 
     'getHistorialCaja', 'getDetalleCorte', 'getCsrfToken',
     'getProductosAdmin', 'getProducto', 'buscarProductosAdmin',
-    'getProductosEstadisticas', 'getCategoriasConConteo'
+    'getProductosEstadisticas', 'getCategoriasConConteo',
+    'buscarVentas', 'getVentaDetalle'
 ];
 
 $productos = new Productos();
@@ -69,7 +70,7 @@ if (class_exists('ProductosAdmin')) {
 
 $accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($accion, ['registrarProducto', 'actualizarProducto', 'eliminarProducto'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($accion, ['registrarProducto', 'actualizarProducto', 'eliminarProducto', 'realizarCambio'])) {
     $cache_files = glob(sys_get_temp_dir() . '/pos_cache_*getProductos*');
     foreach ($cache_files as $file) {
         @unlink($file);
@@ -100,6 +101,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($cache_ttl[$accion])) {
 // Función para guardar en caché
 function cacheResponse($data, $cache_file) {
     file_put_contents($cache_file, json_encode($data));
+}
+
+// Función para generar folio de cambio
+function generarFolioCambio($conn) {
+    $fecha = date('Ymd');
+    $stmt = $conn->prepare("SELECT COUNT(*) as total FROM cambios_productos WHERE folio_cambio LIKE ?");
+    $like = "CAMBIO-{$fecha}-%";
+    $stmt->bind_param("s", $like);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $consecutivo = str_pad($row['total'] + 1, 5, '0', STR_PAD_LEFT);
+    $stmt->close();
+    
+    return "CAMBIO-{$fecha}-{$consecutivo}";
 }
 
 // Switch de acciones
@@ -365,6 +381,290 @@ try {
                 $response = ['success' => false, 'message' => 'Módulo de productos no disponible'];
             }
             break;
+        
+        // ==================== MÓDULO DE CAMBIOS ====================
+        
+        case 'buscarVentas':
+            $termino = $_GET['termino'] ?? '';
+            $termino = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $termino), 0, 50);
+            
+            try {
+                $stmt = $conn->prepare("SELECT id, folio, total, metodo_pago, fecha FROM ventas WHERE folio LIKE ? ORDER BY fecha DESC LIMIT 10");
+                $termino_like = "%$termino%";
+                $stmt->bind_param("s", $termino_like);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $ventas = [];
+                while ($row = $result->fetch_assoc()) {
+                    $ventas[] = $row;
+                }
+                $stmt->close();
+                
+                $response = ['success' => true, 'ventas' => $ventas];
+            } catch (Exception $e) {
+                error_log("Error en buscarVentas: " . $e->getMessage());
+                $response = ['success' => false, 'message' => 'Error al buscar ventas'];
+            }
+            break;
+
+        case 'getVentaDetalle':
+            $id = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT);
+            
+            if (!$id || $id <= 0) {
+                $response = ['success' => false, 'message' => 'ID inválido'];
+                break;
+            }
+            
+            try {
+                $stmt = $conn->prepare("SELECT dv.*, p.nombre, p.codigo_barras FROM detalles_venta dv JOIN productos p ON dv.producto_id = p.id WHERE dv.venta_id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $detalles = [];
+                while ($row = $result->fetch_assoc()) {
+                    $detalles[] = $row;
+                }
+                $stmt->close();
+                
+                $response = ['success' => true, 'detalles' => $detalles];
+            } catch (Exception $e) {
+                error_log("Error en getVentaDetalle: " . $e->getMessage());
+                $response = ['success' => false, 'message' => 'Error al obtener detalles'];
+            }
+            break;
+
+        case 'realizarCambio':
+            $venta_id = filter_var($_POST['venta_id'] ?? 0, FILTER_VALIDATE_INT);
+            $producto_original_id = filter_var($_POST['producto_original_id'] ?? 0, FILTER_VALIDATE_INT);
+            $producto_nuevo_id = filter_var($_POST['producto_nuevo_id'] ?? 0, FILTER_VALIDATE_INT);
+            $cantidad = filter_var($_POST['cantidad'] ?? 0, FILTER_VALIDATE_INT);
+            $motivo = isset($_POST['motivo']) ? substr(sanitize($_POST['motivo']), 0, 500) : 'Cambio solicitado por cliente';
+            
+            if (!$venta_id || $venta_id <= 0) {
+                $response = ['success' => false, 'message' => 'ID de venta inválido'];
+                break;
+            }
+            
+            if (!$producto_original_id || $producto_original_id <= 0) {
+                $response = ['success' => false, 'message' => 'ID de producto original inválido'];
+                break;
+            }
+            
+            if (!$producto_nuevo_id || $producto_nuevo_id <= 0) {
+                $response = ['success' => false, 'message' => 'ID de producto nuevo inválido'];
+                break;
+            }
+            
+            if (!$cantidad || $cantidad <= 0) {
+                $response = ['success' => false, 'message' => 'Cantidad inválida'];
+                break;
+            }
+            
+            try {
+                $conn->begin_transaction();
+                
+                // 1. Verificar que la venta existe
+                $stmt = $conn->prepare("SELECT id, folio, total FROM ventas WHERE id = ?");
+                $stmt->bind_param("i", $venta_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $venta = $result->fetch_assoc();
+                $stmt->close();
+                
+                if (!$venta) {
+                    throw new Exception("Venta no encontrada");
+                }
+                
+                // 2. Verificar que el detalle de venta existe y tiene suficiente cantidad
+                $stmt = $conn->prepare("SELECT dv.*, p.nombre, p.precio FROM detalles_venta dv JOIN productos p ON dv.producto_id = p.id WHERE dv.venta_id = ? AND dv.producto_id = ?");
+                $stmt->bind_param("ii", $venta_id, $producto_original_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $detalle_original = $result->fetch_assoc();
+                $stmt->close();
+                
+                if (!$detalle_original) {
+                    throw new Exception("Producto no encontrado en la venta");
+                }
+                
+                if ($detalle_original['cantidad'] < $cantidad) {
+                    throw new Exception("No hay suficiente cantidad para cambiar. Disponible: {$detalle_original['cantidad']}");
+                }
+                
+                // 3. Verificar stock del producto nuevo
+                $stmt = $conn->prepare("SELECT id, nombre, stock_actual, precio FROM productos WHERE id = ?");
+                $stmt->bind_param("i", $producto_nuevo_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $producto_nuevo = $result->fetch_assoc();
+                $stmt->close();
+                
+                if (!$producto_nuevo) {
+                    throw new Exception("Producto nuevo no encontrado");
+                }
+                
+                if ($producto_nuevo['stock_actual'] < $cantidad) {
+                    throw new Exception("Stock insuficiente del producto nuevo. Disponible: {$producto_nuevo['stock_actual']}");
+                }
+                
+                // 4. Obtener precios
+                $precio_original = floatval($detalle_original['precio_unitario']);
+                $precio_nuevo = floatval($producto_nuevo['precio']);
+                
+                // CALCULAR LA DIFERENCIA CORRECTAMENTE
+                // Si el nuevo producto es más caro: diferencia POSITIVA (cliente paga)
+                // Si el nuevo producto es más barato: diferencia NEGATIVA (se devuelve dinero)
+                $diferencia_por_unidad = $precio_nuevo - $precio_original;
+                $diferencia_total = $diferencia_por_unidad * $cantidad;
+                
+                // 5. Generar folio de cambio
+                $folio_cambio = generarFolioCambio($conn);
+                
+                // 6. Insertar registro en cambios_productos
+                $stmt = $conn->prepare("INSERT INTO cambios_productos (venta_id, folio_cambio, producto_original_id, producto_nuevo_id, cantidad, precio_original, precio_nuevo, diferencia_precio, motivo, usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $usuario = 'Administrador';
+                $stmt->bind_param("isiiidddss", $venta_id, $folio_cambio, $producto_original_id, $producto_nuevo_id, $cantidad, $precio_original, $precio_nuevo, $diferencia_total, $motivo, $usuario);
+                $stmt->execute();
+                $cambio_id = $conn->insert_id;
+                $stmt->close();
+                
+                // 7. Registrar en auditoría de cambios
+                $datos_cambio = json_encode([
+                    'venta_id' => $venta_id,
+                    'folio_venta' => $venta['folio'],
+                    'producto_original' => $detalle_original['nombre'],
+                    'producto_nuevo' => $producto_nuevo['nombre'],
+                    'cantidad' => $cantidad,
+                    'precio_original' => $precio_original,
+                    'precio_nuevo' => $precio_nuevo,
+                    'diferencia_por_unidad' => $diferencia_por_unidad,
+                    'diferencia_total' => $diferencia_total
+                ]);
+                
+                $stmt = $conn->prepare("INSERT INTO auditoria_cambios (cambio_id, accion, datos_nuevos, usuario) VALUES (?, 'creado', ?, ?)");
+                $stmt->bind_param("iss", $cambio_id, $datos_cambio, $usuario);
+                $stmt->execute();
+                $stmt->close();
+                
+                // 8. Actualizar o eliminar el detalle original
+                if ($detalle_original['cantidad'] > $cantidad) {
+                    $nueva_cantidad = $detalle_original['cantidad'] - $cantidad;
+                    $nuevo_subtotal = $nueva_cantidad * $precio_original;
+                    
+                    $stmt = $conn->prepare("UPDATE detalles_venta SET cantidad = ?, subtotal = ? WHERE id = ?");
+                    $stmt->bind_param("idi", $nueva_cantidad, $nuevo_subtotal, $detalle_original['id']);
+                    $stmt->execute();
+                    $stmt->close();
+                } else {
+                    $stmt = $conn->prepare("DELETE FROM detalles_venta WHERE id = ?");
+                    $stmt->bind_param("i", $detalle_original['id']);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+                
+                // 9. Agregar el nuevo producto al detalle de venta
+                $nuevo_subtotal = $cantidad * $precio_nuevo;
+                $stmt = $conn->prepare("INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal, fue_cambiado, cambio_id) VALUES (?, ?, ?, ?, ?, 1, ?)");
+                $stmt->bind_param("iiiddi", $venta_id, $producto_nuevo_id, $cantidad, $precio_nuevo, $nuevo_subtotal, $cambio_id);
+                $stmt->execute();
+                $stmt->close();
+                
+                // 10. Actualizar stock de productos
+                // Devolver stock del producto original (lo que el cliente devuelve)
+                $stmt = $conn->prepare("UPDATE productos SET stock_actual = stock_actual + ? WHERE id = ?");
+                $stmt->bind_param("ii", $cantidad, $producto_original_id);
+                $stmt->execute();
+                $stmt->close();
+                
+                // Reducir stock del producto nuevo (lo que el cliente recibe)
+                $stmt = $conn->prepare("UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ?");
+                $stmt->bind_param("ii", $cantidad, $producto_nuevo_id);
+                $stmt->execute();
+                $stmt->close();
+                
+                // 11. Registrar movimientos de inventario
+                // Movimiento para el producto original (entrada por devolución)
+                $justificacion = "Devolución por cambio - Folio: $folio_cambio";
+                $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
+                $stmt->bind_param("i", $producto_original_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $stock_original_actual = $result->fetch_assoc()['stock_actual'];
+                $stock_original_anterior = $stock_original_actual - $cantidad;
+                $stmt->close();
+                
+                $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'entrada', ?, ?, ?, ?)");
+                $stmt->bind_param("iiiss", $producto_original_id, $cantidad, $stock_original_anterior, $stock_original_actual, $justificacion);
+                $stmt->execute();
+                $stmt->close();
+                
+                // Movimiento para el producto nuevo (salida por cambio)
+                $stmt = $conn->prepare("SELECT stock_actual FROM productos WHERE id = ?");
+                $stmt->bind_param("i", $producto_nuevo_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $stock_nuevo_actual = $result->fetch_assoc()['stock_actual'];
+                $stock_nuevo_anterior = $stock_nuevo_actual + $cantidad;
+                $stmt->close();
+                
+                $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'salida', ?, ?, ?, ?)");
+                $stmt->bind_param("iiiss", $producto_nuevo_id, $cantidad, $stock_nuevo_anterior, $stock_nuevo_actual, $justificacion);
+                $stmt->execute();
+                $stmt->close();
+                
+                // 12. Recalcular el total de la venta
+                $stmt = $conn->prepare("SELECT SUM(subtotal) as suma_detalles FROM detalles_venta WHERE venta_id = ?");
+                $stmt->bind_param("i", $venta_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $suma_detalles = floatval($result->fetch_assoc()['suma_detalles']);
+                $stmt->close();
+                
+                // El nuevo total de la venta = suma de todos los detalles
+                $nuevo_total = $suma_detalles;
+                
+                // Actualizar el total de la venta
+                $stmt = $conn->prepare("UPDATE ventas SET total = ?, cambios_realizados = 1 WHERE id = ?");
+                $stmt->bind_param("di", $nuevo_total, $venta_id);
+                $stmt->execute();
+                $stmt->close();
+                
+                $conn->commit();
+                
+                // Preparar mensaje de respuesta con la información correcta de la diferencia
+                $mensaje_diferencia = "";
+                if ($diferencia_total > 0) {
+                    $mensaje_diferencia = " El cliente debe pagar $" . number_format($diferencia_total, 2);
+                } else if ($diferencia_total < 0) {
+                    $mensaje_diferencia = " Se debe devolver al cliente $" . number_format(abs($diferencia_total), 2);
+                }
+                
+                $response = [
+                    'success' => true, 
+                    'message' => '✅ Cambio realizado exitosamente.' . $mensaje_diferencia,
+                    'folio_cambio' => $folio_cambio,
+                    'cambio_id' => $cambio_id,
+                    'datos' => [
+                        'folio_venta' => $venta['folio'],
+                        'producto_original' => $detalle_original['nombre'],
+                        'producto_nuevo' => $producto_nuevo['nombre'],
+                        'cantidad' => $cantidad,
+                        'precio_original' => $precio_original,
+                        'precio_nuevo' => $precio_nuevo,
+                        'diferencia_por_unidad' => $diferencia_por_unidad,
+                        'diferencia_total' => $diferencia_total,
+                        'mensaje_diferencia' => $mensaje_diferencia
+                    ]
+                ];
+                
+            } catch (Exception $e) {
+                $conn->rollback();
+                error_log("Error en realizarCambio: " . $e->getMessage());
+                $response = ['success' => false, 'message' => 'Error al realizar el cambio: ' . $e->getMessage()];
+            }
+            break;
             
         default:
             http_response_code(400);
@@ -396,3 +696,4 @@ if (rand(1, 100) === 1) {
 if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
     ob_end_flush();
 }
+?>
