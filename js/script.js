@@ -441,12 +441,16 @@ class POSSystem {
                     if (posSection) {
                         posSection.style.display = 'block';
                         this.verificarCajaAntesDeVender();
+                        this.recargarProductos();
                         setTimeout(() => {
                             document.getElementById('codigoBarras')?.focus();
                         }, 100);
                     }
                     this.actualizarPanelLateral('puntoventa');
+<<<<<<< HEAD
                     this.mostrarProductos(this.productos);
+=======
+>>>>>>> 0dc2d518a8ffa91d73824a41643e9a1605017af2
                 } else if (modulo === 'productos') {
                     if (window.moduloProductos) {
                         window.moduloProductos.mostrarModulo();
@@ -672,6 +676,7 @@ class POSSystem {
         }
     }
 
+<<<<<<< HEAD
     actualizarVistaProductos() {
         const seccionPuntoVenta = document.getElementById('seccionPuntoVenta');
         const moduloVisible = seccionPuntoVenta && seccionPuntoVenta.style.display !== 'none';
@@ -682,9 +687,55 @@ class POSSystem {
                 this.mostrarProductos(productosFiltrados);
             } else {
                 this.mostrarProductos(this.productos);
+=======
+    async recargarProductos() {
+        try {
+            const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            this.productos = data;
+            
+            const categoriaActivaActual = this.categoriaActiva;
+            const moduloVisible = document.getElementById('seccionPuntoVenta')?.style.display === 'block';
+            
+            if (moduloVisible) {
+                await this.filtrarProductos();
+                this.categoriaActiva = categoriaActivaActual;
+                
+                const filtros = document.querySelectorAll('.filtro-btn');
+                filtros.forEach(btn => {
+                    if (btn.textContent === categoriaActivaActual) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
             }
+            
+            const carritoActual = this.carrito;
+            if (carritoActual && carritoActual.length > 0) {
+                for (const item of carritoActual) {
+                    const productoActualizado = this.productos.find(p => p.id === item.id);
+                    if (productoActualizado) {
+                        const cantidadCarrito = item.cantidad;
+                        if (cantidadCarrito > productoActualizado.stock_actual) {
+                            await this.modificarCantidad(item.id, productoActualizado.stock_actual);
+                            this.mostrarNotificacion(`⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`, 'warning');
+                        }
+                    }
+                }
+>>>>>>> 0dc2d518a8ffa91d73824a41643e9a1605017af2
+            }
+            
+            if (window.moduloProductos) {
+                window.moduloProductos.cargarProductos();
+            }
+        } catch (error) {
+            console.error('Error recargando productos:', error);
         }
     }
+<<<<<<< HEAD
 
     async recargarProductos() {
         try {
@@ -740,6 +791,8 @@ class POSSystem {
             console.error('Error recargando productos:', error);
         }
     }
+=======
+>>>>>>> 0dc2d518a8ffa91d73824a41643e9a1605017af2
 
     mostrarCargando(mostrar) {
         const grid = document.getElementById('productosGrid');
@@ -1422,6 +1475,18 @@ class POSSystem {
             });
         }
         
+<<<<<<< HEAD
+=======
+        document.querySelectorAll('.filtro-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.categoriaActiva = e.target.textContent;
+                this.filtrarProductos();
+            });
+        });
+        
+>>>>>>> 0dc2d518a8ffa91d73824a41643e9a1605017af2
         this.initResponsive();
     }
 
