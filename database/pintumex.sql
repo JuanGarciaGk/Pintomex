@@ -1,9 +1,5 @@
 CREATE DATABASE IF NOT EXISTS pintumex_pos;
 USE pintumex_pos;
-
--- =====================================================
--- 1. TABLA DE PRODUCTOS
--- =====================================================
 CREATE TABLE productos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     codigo_barras VARCHAR(50) UNIQUE NOT NULL,
@@ -29,9 +25,6 @@ CREATE TABLE productos (
     INDEX idx_stock_actual (stock_actual)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 2. TABLA DE VENTAS
--- =====================================================
 CREATE TABLE ventas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     folio VARCHAR(20) UNIQUE NOT NULL,
@@ -49,9 +42,6 @@ CREATE TABLE ventas (
     INDEX idx_corte_caja_id (corte_caja_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 3. TABLA DE DETALLES DE VENTA
--- =====================================================
 CREATE TABLE detalles_venta (
     id INT AUTO_INCREMENT PRIMARY KEY,
     venta_id INT NOT NULL,
@@ -69,9 +59,6 @@ CREATE TABLE detalles_venta (
     FOREIGN KEY (producto_id) REFERENCES productos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 4. TABLA DE MOVIMIENTOS DE INVENTARIO
--- =====================================================
 CREATE TABLE movimientos_inventario (
     id INT AUTO_INCREMENT PRIMARY KEY,
     producto_id INT NOT NULL,
@@ -87,9 +74,6 @@ CREATE TABLE movimientos_inventario (
     FOREIGN KEY (producto_id) REFERENCES productos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 5. TABLA DE CORTES DE CAJA
--- =====================================================
 CREATE TABLE cortes_caja (
     id INT AUTO_INCREMENT PRIMARY KEY,
     fecha_apertura DATETIME NOT NULL,
@@ -106,9 +90,6 @@ CREATE TABLE cortes_caja (
     INDEX idx_fecha_apertura (fecha_apertura)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 6. TABLA DE MOVIMIENTOS DE CAJA (GASTOS/INGRESOS)
--- =====================================================
 CREATE TABLE movimientos_caja (
     id INT AUTO_INCREMENT PRIMARY KEY,
     corte_caja_id INT NOT NULL,
@@ -122,9 +103,6 @@ CREATE TABLE movimientos_caja (
     FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 7. TABLA DE CAMBIOS DE PRODUCTOS (NUEVA)
--- =====================================================
 CREATE TABLE cambios_productos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     venta_id INT NOT NULL,
@@ -149,9 +127,6 @@ CREATE TABLE cambios_productos (
     FOREIGN KEY (producto_nuevo_id) REFERENCES productos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 8. TABLA DE AUDITORÍA DE CAMBIOS (NUEVA)
--- =====================================================
 CREATE TABLE auditoria_cambios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cambio_id INT NOT NULL,
@@ -164,14 +139,8 @@ CREATE TABLE auditoria_cambios (
     FOREIGN KEY (cambio_id) REFERENCES cambios_productos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- 9. AGREGAR FOREIGN KEY FALTANTE EN VENTAS
--- =====================================================
 ALTER TABLE ventas ADD FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id);
 
--- =====================================================
--- 10. FUNCIÓN PARA GENERAR FOLIO DE CAMBIO AUTOMÁTICO
--- =====================================================
 DELIMITER //
 
 CREATE FUNCTION generar_folio_cambio() 
@@ -195,9 +164,6 @@ END//
 
 DELIMITER ;
 
--- =====================================================
--- 11. TRIGGER PARA ACTUALIZAR CAMBIOS_REALIZADOS EN VENTAS
--- =====================================================
 DELIMITER //
 
 CREATE TRIGGER tr_ventas_cambios_realizados
@@ -209,9 +175,6 @@ END//
 
 DELIMITER ;
 
--- =====================================================
--- 12. VISTA PARA REPORTE DE CAMBIOS
--- =====================================================
 CREATE OR REPLACE VIEW vista_cambios_productos AS
 SELECT 
     c.id AS cambio_id,
@@ -246,9 +209,6 @@ INNER JOIN ventas v ON c.venta_id = v.id
 INNER JOIN productos p_original ON c.producto_original_id = p_original.id
 INNER JOIN productos p_nuevo ON c.producto_nuevo_id = p_nuevo.id;
 
--- =====================================================
--- 13. DATOS DE PRUEBA (PRODUCTOS INICIALES)
--- =====================================================
 INSERT INTO productos (codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual) VALUES
 ('7501357071482', 'Pintura Blanca Mate', 'Blanco mate, 19L - Ideal para interiores y exteriores', 'Acrílicas', 450.50, 5, 20),
 ('7501234567892', 'Rodillo Pro 9"', 'Rodillo de alta calidad para acabado profesional', 'Complementos', 89.90, 3, 15),
@@ -266,9 +226,6 @@ INSERT INTO productos (codigo_barras, nombre, descripcion, categoria, precio, st
 ('7501234567904', 'Aerosol Blanco Mate', 'Pintura en aerosol blanco mate, 400ml', 'Aerosol', 85.50, 10, 18),
 ('7501234567905', 'Barniz Transparente', 'Barniz transparente brillante, 4L', 'Barniz', 480.00, 5, 7);
 
--- =====================================================
--- 14. VERIFICACIÓN DE LA INSTALACIÓN
--- =====================================================
 SELECT '✅ Base de datos creada correctamente' AS mensaje;
 SELECT 'Tablas creadas:' AS info;
 SHOW TABLES;
@@ -277,21 +234,14 @@ SELECT 'Cantidad de productos:' AS info, COUNT(*) FROM productos;
 SELECT 'Estructura de cambios_productos:' AS info;
 DESCRIBE cambios_productos;
 
--- =====================================================
--- 15. CONSULTAS DE EJEMPLO PARA VERIFICAR
--- =====================================================
-
--- Ver productos con stock bajo
 SELECT 'Productos con stock bajo:' AS consulta;
 SELECT nombre, stock_actual, stock_minimo 
 FROM productos 
 WHERE stock_actual <= stock_minimo;
 
--- Ver vista de cambios (inicialmente vacía)
 SELECT 'Vista de cambios (vacía inicialmente):' AS consulta;
 SELECT * FROM vista_cambios_productos LIMIT 5;
 
--- Verificar funciones y triggers
 SELECT 'Funciones y triggers:' AS consulta;
 SHOW FUNCTION STATUS WHERE Db = 'pintumex_pos';
 SHOW TRIGGERS FROM pintumex_pos;

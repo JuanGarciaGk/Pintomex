@@ -26,11 +26,9 @@ class POSSystem {
         this.initScanner();
         this.iniciarCategorias();
         
-        await Promise.all([
-            this.verificarConexionBD(),
-            this.cargarProductosDesdeBD(),
-            this.actualizarCarrito()
-        ]);
+        await this.cargarProductosDesdeBD();
+        await this.actualizarCarrito();
+        await this.verificarConexionBD();
         
         if ('requestIdleCallback' in window) {
             requestIdleCallback(() => {
@@ -113,17 +111,31 @@ class POSSystem {
         const filtrosContainer = document.getElementById('filtrosCategoria');
         if (!filtrosContainer) return;
         
-        const existingButtons = filtrosContainer.querySelectorAll('.filtro-btn');
-        if (existingButtons.length === 1) {
-            this.categorias.forEach(cat => {
-                const btn = document.createElement('button');
-                btn.className = 'filtro-btn';
-                btn.textContent = cat;
-                btn.setAttribute('data-categoria', cat);
-                btn.setAttribute('aria-label', `Filtrar por categoría ${cat}`);
-                filtrosContainer.appendChild(btn);
+        filtrosContainer.innerHTML = '';
+        
+        const btnTodas = document.createElement('button');
+        btnTodas.className = 'filtro-btn active';
+        btnTodas.textContent = 'Todas';
+        btnTodas.setAttribute('data-categoria', 'Todas');
+        filtrosContainer.appendChild(btnTodas);
+        
+        this.categorias.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = 'filtro-btn';
+            btn.textContent = cat;
+            btn.setAttribute('data-categoria', cat);
+            btn.setAttribute('aria-label', `Filtrar por categoría ${cat}`);
+            filtrosContainer.appendChild(btn);
+        });
+        
+        document.querySelectorAll('.filtro-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.categoriaActiva = e.target.textContent;
+                this.filtrarProductos();
             });
-        }
+        });
     }
 
     initScanner() {
@@ -434,6 +446,7 @@ class POSSystem {
                         }, 100);
                     }
                     this.actualizarPanelLateral('puntoventa');
+                    this.mostrarProductos(this.productos);
                 } else if (modulo === 'productos') {
                     if (window.moduloProductos) {
                         window.moduloProductos.mostrarModulo();
@@ -623,19 +636,53 @@ class POSSystem {
             const response = await fetch(url);
             const data = await response.json();
             
-            this.productos = data;
+            console.log('Productos recibidos:', data);
+            
+            if (data && Array.isArray(data)) {
+                this.productos = data;
+            } else if (data && data.success && Array.isArray(data.productos)) {
+                this.productos = data.productos;
+            } else if (data && data.success && data.data && Array.isArray(data.data)) {
+                this.productos = data.data;
+            } else {
+                this.productos = [];
+                console.error('Formato de respuesta inesperado:', data);
+            }
             
             requestAnimationFrame(() => {
+                this.mostrarCargando(false);
                 this.mostrarProductos(this.productos);
-                this.mostrarNotificacion('📦 Stock actualizado', 'success');
+                if (this.productos.length > 0) {
+                    this.mostrarNotificacion(`📦 ${this.productos.length} productos cargados`, 'success');
+                } else {
+                    this.mostrarNotificacion('⚠️ No hay productos en la base de datos', 'warning');
+                }
             });
             
         } catch (error) {
             console.error('Error cargando productos:', error);
             this.mostrarNotificacion('Error al cargar productos: ' + error.message, 'error');
-        } finally {
             this.mostrarCargando(false);
+            const grid = document.getElementById('productosGrid');
+            if (grid) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--danger);">❌ Error al cargar productos. Verifique la conexión.</div>';
+            }
+        } finally {
             this.endMeasure('cargarProductos');
+        }
+    }
+
+    actualizarVistaProductos() {
+        const seccionPuntoVenta = document.getElementById('seccionPuntoVenta');
+        const moduloVisible = seccionPuntoVenta && seccionPuntoVenta.style.display !== 'none';
+        
+        if (moduloVisible && this.productos.length > 0) {
+            if (this.categoriaActiva && this.categoriaActiva !== 'Todas') {
+                const productosFiltrados = this.productos.filter(p => p.categoria === this.categoriaActiva);
+                this.mostrarProductos(productosFiltrados);
+            } else {
+                this.mostrarProductos(this.productos);
+            }
         }
     }
 
@@ -645,27 +692,21 @@ class POSSystem {
             const response = await fetch(url);
             const data = await response.json();
             
-            this.productos = data;
-            
-            const categoriaActivaActual = this.categoriaActiva;
-            const moduloVisible = document.getElementById('seccionPuntoVenta')?.style.display === 'block';
-            
-            if (moduloVisible) {
-                await this.filtrarProductos();
-                this.categoriaActiva = categoriaActivaActual;
-                
-                const filtros = document.querySelectorAll('.filtro-btn');
-                filtros.forEach(btn => {
-                    if (btn.textContent === categoriaActivaActual) {
-                        btn.classList.add('active');
-                    } else {
-                        btn.classList.remove('active');
-                    }
-                });
+            if (data && Array.isArray(data)) {
+                this.productos = data;
+            } else if (data && data.success && Array.isArray(data.productos)) {
+                this.productos = data.productos;
+            } else if (data && data.success && data.data && Array.isArray(data.data)) {
+                this.productos = data.data;
+            } else {
+                this.productos = [];
             }
+            
+            this.actualizarVistaProductos();
             
             const carritoActual = this.carrito;
             if (carritoActual && carritoActual.length > 0) {
+                let carritoModificado = false;
                 for (const item of carritoActual) {
                     const productoActualizado = this.productos.find(p => p.id === item.id);
                     if (productoActualizado) {
@@ -673,14 +714,28 @@ class POSSystem {
                         if (cantidadCarrito > productoActualizado.stock_actual) {
                             await this.modificarCantidad(item.id, productoActualizado.stock_actual);
                             this.mostrarNotificacion(`⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`, 'warning');
+                            carritoModificado = true;
+                        }
+                        if (window.pos && window.pos.carrito) {
+                            const carritoItem = window.pos.carrito.find(i => i.id === item.id);
+                            if (carritoItem) {
+                                carritoItem.stock = productoActualizado.stock_actual;
+                            }
                         }
                     }
+                }
+                if (!carritoModificado) {
+                    await this.actualizarCarrito();
                 }
             }
             
             if (window.moduloProductos) {
                 window.moduloProductos.cargarProductos();
             }
+            
+            const cacheKey = this.apiUrl + '?accion=getProductos';
+            this.cache.delete(cacheKey);
+            
         } catch (error) {
             console.error('Error recargando productos:', error);
         }
@@ -730,6 +785,19 @@ class POSSystem {
         this.startMeasure('agregarAlCarrito');
         
         try {
+            const productoActualizado = this.productos.find(p => p.id === productoId);
+            if (!productoActualizado) {
+                this.mostrarNotificacion('❌ Producto no encontrado', 'error');
+                this.cargando = false;
+                return;
+            }
+            
+            if (productoActualizado.stock_actual < cantidad) {
+                this.mostrarNotificacion(`❌ Stock insuficiente. Disponible: ${productoActualizado.stock_actual}`, 'error');
+                this.cargando = false;
+                return;
+            }
+            
             const formData = new FormData();
             formData.append('accion', 'agregarCarrito');
             formData.append('producto_id', productoId);
@@ -938,18 +1006,20 @@ class POSSystem {
         this.mostrarCargando(true);
         
         try {
-            const response = await fetch(this.apiUrl + '?accion=getProductosPorCategoria&categoria=' + encodeURIComponent(this.categoriaActiva));
+            const url = this.apiUrl + '?accion=getProductosPorCategoria&categoria=' + encodeURIComponent(this.categoriaActiva) + '&_t=' + Date.now();
+            const response = await fetch(url);
             const productos = await response.json();
             
             requestAnimationFrame(() => {
+                this.mostrarCargando(false);
                 this.mostrarProductos(productos);
             });
             
         } catch (error) {
             console.error('Error filtrando:', error);
             this.mostrarNotificacion('Error al filtrar: ' + error.message, 'error');
-        } finally {
             this.mostrarCargando(false);
+        } finally {
             this.endMeasure('filtrarProductos');
         }
     }
@@ -958,7 +1028,7 @@ class POSSystem {
         const grid = document.getElementById('productosGrid');
         if (!grid) return;
         
-        if (productos.length === 0) {
+        if (!productos || productos.length === 0) {
             grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--gray);">No hay productos disponibles</div>';
             return;
         }
@@ -1002,28 +1072,31 @@ class POSSystem {
         grid.innerHTML = '';
         grid.appendChild(fragment);
         
-        grid.addEventListener('click', (e) => {
-            const card = e.target.closest('.producto-card');
-            if (card && card.dataset.id && card.getAttribute('aria-disabled') !== 'true') {
-                const producto = this.productos.find(p => p.id == card.dataset.id);
-                if (producto && producto.stock_actual > 0) {
-                    this.agregarAlCarrito(parseInt(card.dataset.id));
-                } else if (producto) {
-                    this.mostrarNotificacion('❌ No hay stock disponible de este producto', 'error');
-                }
-            }
-        });
-        
-        grid.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const card = e.target.closest('.producto-card');
-                if (card && card.dataset.id && card.getAttribute('aria-disabled') !== 'true') {
-                    const producto = this.productos.find(p => p.id == card.dataset.id);
+        grid.querySelectorAll('.producto-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const productoId = card.dataset.id;
+                if (productoId && card.getAttribute('aria-disabled') !== 'true') {
+                    const producto = this.productos.find(p => p.id == productoId);
                     if (producto && producto.stock_actual > 0) {
-                        this.agregarAlCarrito(parseInt(card.dataset.id));
+                        this.agregarAlCarrito(parseInt(productoId));
+                    } else if (producto) {
+                        this.mostrarNotificacion('❌ No hay stock disponible de este producto', 'error');
                     }
                 }
-            }
+            });
+            
+            card.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const productoId = card.dataset.id;
+                    if (productoId && card.getAttribute('aria-disabled') !== 'true') {
+                        const producto = this.productos.find(p => p.id == productoId);
+                        if (producto && producto.stock_actual > 0) {
+                            this.agregarAlCarrito(parseInt(productoId));
+                        }
+                    }
+                }
+            });
         });
         
         if (this.observer) {
@@ -1348,15 +1421,6 @@ class POSSystem {
                 }
             });
         }
-        
-        document.querySelectorAll('.filtro-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                this.categoriaActiva = e.target.textContent;
-                this.filtrarProductos();
-            });
-        });
         
         this.initResponsive();
     }
@@ -1693,7 +1757,7 @@ class POSSystem {
             border-radius: var(--radius-md);
             box-shadow: var(--shadow-lg);
             z-index: 3000;
-            animation: slideInRight 0.3s, pulse 2s infinite;
+            animation: slideInRight 0.3s;
             display: flex;
             align-items: center;
             gap: 1rem;
@@ -1714,7 +1778,7 @@ class POSSystem {
                     }
                 }, 300);
             }
-        }, 2000);
+        }, 3000);
     }
 
     destroy() {
