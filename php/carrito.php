@@ -81,7 +81,7 @@ class Carrito {
         $MAX_POR_PRODUCTO = 99;
         if ($cantidad > $MAX_POR_PRODUCTO) {
             return [
-                'success' => false, 
+                'success' => false,
                 'message' => "Máximo $MAX_POR_PRODUCTO unidades por producto",
                 'max_stock' => $MAX_POR_PRODUCTO
             ];
@@ -105,7 +105,7 @@ class Carrito {
             
             if ($cantidad > $producto['stock_actual']) {
                 return [
-                    'success' => false, 
+                    'success' => false,
                     'message' => 'Stock insuficiente. Disponible: ' . $producto['stock_actual'],
                     'max_stock' => intval($producto['stock_actual'])
                 ];
@@ -165,7 +165,6 @@ class Carrito {
             if (!isset($item['id']) || !isset($item['cantidad'])) {
                 return ['success' => false, 'message' => 'Datos de producto inválidos'];
             }
-            
             if ($item['cantidad'] <= 0) {
                 return ['success' => false, 'message' => 'Cantidad inválida para ' . ($item['nombre'] ?? 'producto')];
             }
@@ -210,7 +209,6 @@ class Carrito {
                 if (!isset($productos_stock[$item['id']])) {
                     throw new Exception("Producto no encontrado: {$item['nombre']}");
                 }
-                
                 if ($item['cantidad'] > $productos_stock[$item['id']]) {
                     throw new Exception("Stock insuficiente para: {$item['nombre']}. Disponible: {$productos_stock[$item['id']]}");
                 }
@@ -227,7 +225,8 @@ class Carrito {
             }
             $stmt->close();
             
-            $stmt = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio) VALUES (?, ?, ?, ?, ?, ?)");
+            // ✅ Insertar venta con estado 'activa'
+            $stmt = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio, estado) VALUES (?, ?, ?, ?, ?, ?, 'activa')");
             $subtotal = floatval($carrito['subtotal']);
             $total = floatval($carrito['total']);
             $efectivo_recibido_db = $efectivo_recibido !== null ? floatval($efectivo_recibido) : null;
@@ -283,6 +282,146 @@ class Carrito {
             $conn->rollback();
             error_log("Error en venta: " . $e->getMessage());
             return ['success' => false, 'message' => 'Error al procesar la venta: ' . $e->getMessage()];
+        }
+    }
+
+    // ✅ NUEVO: Cancelar venta y restaurar stock
+    public function cancelarVenta($folio, $motivo) {
+        global $conn;
+
+        if (empty($folio)) {
+            return ['success' => false, 'message' => 'Folio requerido'];
+        }
+
+        $folio = substr(trim($folio), 0, 20);
+        $motivo = substr(trim($motivo ?? 'Sin motivo'), 0, 255);
+
+        try {
+            // Buscar la venta por folio
+            $stmt = $conn->prepare("SELECT * FROM ventas WHERE folio = ?");
+            $stmt->bind_param("s", $folio);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $venta = $result->fetch_assoc();
+            $stmt->close();
+
+            if (!$venta) {
+                return ['success' => false, 'message' => 'No se encontró ningún ticket con ese folio'];
+            }
+
+            if ($venta['estado'] === 'cancelada') {
+                return ['success' => false, 'message' => 'Este ticket ya fue cancelado anteriormente'];
+            }
+
+            // Obtener los detalles de la venta para restaurar el stock
+            $stmt = $conn->prepare("SELECT dv.producto_id, dv.cantidad, p.stock_actual, p.nombre 
+                                    FROM detalles_venta dv 
+                                    JOIN productos p ON p.id = dv.producto_id 
+                                    WHERE dv.venta_id = ?");
+            $stmt->bind_param("i", $venta['id']);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $detalles = [];
+            while ($row = $result->fetch_assoc()) {
+                $detalles[] = $row;
+            }
+            $stmt->close();
+
+            $conn->begin_transaction();
+
+            // Marcar la venta como cancelada
+            $stmt = $conn->prepare("UPDATE ventas SET estado = 'cancelada' WHERE id = ?");
+            $stmt->bind_param("i", $venta['id']);
+            $stmt->execute();
+            $stmt->close();
+
+            // Restaurar el stock de cada producto
+            foreach ($detalles as $detalle) {
+                $stock_anterior = intval($detalle['stock_actual']);
+                $stock_nuevo = $stock_anterior + intval($detalle['cantidad']);
+
+                $stmt = $conn->prepare("UPDATE productos SET stock_actual = ? WHERE id = ?");
+                $stmt->bind_param("ii", $stock_nuevo, $detalle['producto_id']);
+                $stmt->execute();
+                $stmt->close();
+
+                $justificacion = "Cancelación ticket #$folio";
+                $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'entrada', ?, ?, ?, ?)");
+                $stmt->bind_param("iiiss", $detalle['producto_id'], $detalle['cantidad'], $stock_anterior, $stock_nuevo, $justificacion);
+                $stmt->execute();
+                $stmt->close();
+            }
+
+            // Registrar la cancelación
+            $monto = floatval($venta['total']);
+            $stmt = $conn->prepare("INSERT INTO cancelaciones_venta (venta_id, folio_venta, motivo, monto_cancelado) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("issd", $venta['id'], $folio, $motivo, $monto);
+            $stmt->execute();
+            $stmt->close();
+
+            $conn->commit();
+
+            return [
+                'success' => true,
+                'message' => "Ticket #$folio cancelado exitosamente. Se restauró el stock de " . count($detalles) . " producto(s).",
+                'monto_cancelado' => $monto,
+                'metodo_pago' => $venta['metodo_pago']
+            ];
+
+        } catch (Exception $e) {
+            $conn->rollback();
+            error_log("Error en cancelarVenta: " . $e->getMessage());
+            return ['success' => false, 'message' => 'Error al cancelar el ticket: ' . $e->getMessage()];
+        }
+    }
+
+    // ✅ NUEVO: Buscar venta por folio para previsualizar
+    public function buscarVentaPorFolio($folio) {
+        global $conn;
+
+        $folio = substr(trim($folio), 0, 20);
+
+        if (empty($folio)) {
+            return ['success' => false, 'message' => 'Folio requerido'];
+        }
+
+        try {
+            $stmt = $conn->prepare("SELECT v.*, 
+                                    GROUP_CONCAT(CONCAT(p.nombre, ' x', dv.cantidad, ' ($', FORMAT(dv.precio_unitario,2), ')') SEPARATOR ', ') as productos_resumen
+                                    FROM ventas v
+                                    LEFT JOIN detalles_venta dv ON dv.venta_id = v.id
+                                    LEFT JOIN productos p ON p.id = dv.producto_id
+                                    WHERE v.folio = ?
+                                    GROUP BY v.id");
+            $stmt->bind_param("s", $folio);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $venta = $result->fetch_assoc();
+            $stmt->close();
+
+            if (!$venta) {
+                return ['success' => false, 'message' => 'No se encontró ningún ticket con ese folio'];
+            }
+
+            // Detalles completos
+            $stmt = $conn->prepare("SELECT dv.*, p.nombre as producto_nombre 
+                                    FROM detalles_venta dv 
+                                    JOIN productos p ON p.id = dv.producto_id 
+                                    WHERE dv.venta_id = ?");
+            $stmt->bind_param("i", $venta['id']);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $detalles = [];
+            while ($row = $result->fetch_assoc()) {
+                $detalles[] = $row;
+            }
+            $stmt->close();
+
+            return ['success' => true, 'venta' => $venta, 'detalles' => $detalles];
+
+        } catch (Exception $e) {
+            error_log("Error en buscarVentaPorFolio: " . $e->getMessage());
+            return ['success' => false, 'message' => 'Error al buscar el ticket'];
         }
     }
 }

@@ -263,15 +263,6 @@
     display: inline-block;
 }
 
-.precio-cell {
-    font-weight: bold;
-    color: var(--secondary-dark);
-}
-
-.stock-cell {
-    text-align: center;
-}
-
 .stock-indicator {
     display: inline-block;
     font-weight: bold;
@@ -288,49 +279,6 @@
 
 .stock-indicator.stock-critico {
     color: var(--danger);
-}
-
-.acciones-cell {
-    white-space: nowrap;
-    display: flex;
-    gap: 0.5rem;
-}
-
-.acciones-cell button {
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-editar {
-    background: var(--primary);
-    color: white;
-}
-
-.btn-editar:hover {
-    background: var(--secondary);
-    transform: scale(1.1);
-}
-
-.btn-eliminar {
-    background: var(--danger);
-    color: white;
-}
-
-.btn-eliminar:hover:not(:disabled) {
-    background: #a04545;
-    transform: scale(1.1);
-}
-
-.btn-eliminar:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 /* Modal formulario */
@@ -477,36 +425,54 @@
     transform: translateY(-2px);
 }
 
+/* ─── Sección de cancelar ticket ─── */
+.cancelar-ticket-container {
+    padding: 0.5rem 0;
+}
+
+.buscar-ticket-box {
+    background: #f8fafc;
+    border-radius: var(--radius-md);
+    padding: 1.2rem 1.5rem;
+    border: 1px solid var(--light);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .productos-header {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .productos-filtros {
         flex-direction: column;
     }
-    
+
     .busqueda-container,
     .filtro-categoria {
         width: 100%;
     }
-    
+
     .btn-limpiar {
         align-self: flex-end;
     }
-    
+
     .form-row {
         grid-template-columns: 1fr;
     }
-    
-    .acciones-cell {
-        flex-wrap: wrap;
+
+    #tabProductos,
+    #tabCancelarTicket {
+        padding: 0.6rem 1rem !important;
+        font-size: 0.85rem !important;
+    }
+
+    .buscar-ticket-box {
+        padding: 1rem;
     }
 }
 
@@ -514,16 +480,16 @@
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .stat-value {
         font-size: 1.5rem;
     }
-    
+
     .stat-icon {
         width: 40px;
         height: 40px;
     }
-    
+
     .stat-icon i {
         font-size: 1.2rem;
     }

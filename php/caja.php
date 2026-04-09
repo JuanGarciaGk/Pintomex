@@ -14,6 +14,7 @@ class Caja {
             $stmt->close();
             
             if ($caja_abierta) {
+                // ✅ Filtrar solo ventas ACTIVAS (no canceladas)
                 $stmt = $conn->prepare("SELECT 
                                             COUNT(*) as total_ventas,
                                             COUNT(CASE WHEN metodo_pago = 'Efectivo' THEN 1 END) as ventas_efectivo,
@@ -21,6 +22,7 @@ class Caja {
                                             COALESCE(SUM(CASE WHEN metodo_pago != 'Efectivo' THEN total ELSE 0 END), 0) as total_electronico
                                         FROM ventas 
                                         WHERE DATE(fecha) = CURDATE() 
+                                        AND estado = 'activa'
                                         AND (corte_caja_id = ? OR corte_caja_id IS NULL)");
                 $stmt->bind_param("i", $caja_abierta['id']);
                 $stmt->execute();
@@ -139,11 +141,13 @@ class Caja {
                 return ['success' => false, 'message' => 'No hay caja abierta'];
             }
             
+            // ✅ Solo ventas ACTIVAS para el cálculo del cierre
             $stmt = $conn->prepare("SELECT 
                                         COALESCE(SUM(CASE WHEN metodo_pago = 'Efectivo' THEN total ELSE 0 END), 0) as total_efectivo,
                                         COALESCE(SUM(CASE WHEN metodo_pago != 'Efectivo' THEN total ELSE 0 END), 0) as total_electronico
                                     FROM ventas 
                                     WHERE DATE(fecha) = CURDATE() 
+                                    AND estado = 'activa'
                                     AND (corte_caja_id = ? OR corte_caja_id IS NULL)");
             $stmt->bind_param("i", $caja['id']);
             $stmt->execute();
@@ -166,7 +170,8 @@ class Caja {
             
             $conn->begin_transaction();
             
-            $stmt = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE DATE(fecha) = CURDATE() AND corte_caja_id IS NULL");
+            // ✅ Solo asociar ventas activas al corte
+            $stmt = $conn->prepare("UPDATE ventas SET corte_caja_id = ? WHERE DATE(fecha) = CURDATE() AND corte_caja_id IS NULL AND estado = 'activa'");
             $stmt->bind_param("i", $caja['id']);
             $stmt->execute();
             $stmt->close();
@@ -216,11 +221,8 @@ class Caja {
             }
             
             $concepto = substr($concepto, 0, 255);
-            
             $monto = floatval($monto);
-            if ($monto <= 0) {
-                return false;
-            }
+            if ($monto <= 0) return false;
             
             $referencia = substr($referencia, 0, 100);
             
@@ -244,7 +246,6 @@ class Caja {
             }
             
             $concepto = substr($concepto, 0, 255);
-            
             $monto = filter_var($monto, FILTER_VALIDATE_FLOAT);
             if ($monto === false || $monto <= 0) {
                 return ['success' => false, 'message' => 'Monto inválido'];
@@ -283,7 +284,7 @@ class Caja {
         
         try {
             $sql = "SELECT c.*, 
-                           (SELECT COUNT(*) FROM ventas WHERE corte_caja_id = c.id) as num_ventas,
+                           (SELECT COUNT(*) FROM ventas WHERE corte_caja_id = c.id AND estado = 'activa') as num_ventas,
                            (SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja WHERE corte_caja_id = c.id AND tipo = 'egreso') as total_gastos
                     FROM cortes_caja c 
                     ORDER BY c.fecha_apertura DESC";
@@ -322,10 +323,12 @@ class Caja {
                 return ['success' => false, 'message' => 'Corte no encontrado'];
             }
             
+            // ✅ Solo ventas activas en el detalle del corte
             $stmt = $conn->prepare("SELECT v.*, COUNT(dv.id) as total_productos 
                                     FROM ventas v 
                                     LEFT JOIN detalles_venta dv ON v.id = dv.venta_id 
-                                    WHERE v.corte_caja_id = ? 
+                                    WHERE v.corte_caja_id = ?
+                                    AND v.estado = 'activa'
                                     GROUP BY v.id 
                                     ORDER BY v.fecha DESC");
             $stmt->bind_param("i", $corte_id);

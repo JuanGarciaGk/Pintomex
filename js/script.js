@@ -25,13 +25,13 @@ class POSSystem {
         this.initPerformanceOptimizations();
         this.initScanner();
         this.iniciarCategorias();
-        
+
         await Promise.all([
             this.verificarConexionBD(),
             this.cargarProductosDesdeBD(),
             this.actualizarCarrito()
         ]);
-        
+
         if ('requestIdleCallback' in window) {
             requestIdleCallback(() => {
                 this.agregarRippleEffect();
@@ -51,7 +51,7 @@ class POSSystem {
                 document.getElementById('codigoBarras')?.focus();
             }, 100);
         }
-        
+
         window.addEventListener('productos-actualizados', () => {
             this.recargarProductos();
         });
@@ -77,9 +77,9 @@ class POSSystem {
         const setVH = () => {
             document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
         };
-        
+
         setVH();
-        
+
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
@@ -89,7 +89,7 @@ class POSSystem {
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             document.documentElement.classList.add('reduce-animations');
         }
-        
+
         this.setupLazyLoading();
     }
 
@@ -112,7 +112,7 @@ class POSSystem {
     iniciarCategorias() {
         const filtrosContainer = document.getElementById('filtrosCategoria');
         if (!filtrosContainer) return;
-        
+
         const existingButtons = filtrosContainer.querySelectorAll('.filtro-btn');
         if (existingButtons.length === 1) {
             this.categorias.forEach(cat => {
@@ -128,25 +128,25 @@ class POSSystem {
 
     initScanner() {
         let lastKeyTime = 0;
-        
+
         document.addEventListener('keypress', (e) => {
             if (!this.scannerActive) return;
             if (e.target && e.target.tagName === 'INPUT' && e.target.id === 'codigoBarras') return;
-            
+
             const now = Date.now();
             const timeDiff = now - lastKeyTime;
-            
+
             if (timeDiff > 100 && this.scannerBuffer.length > 0) {
                 this.scannerBuffer = '';
             }
-            
+
             lastKeyTime = now;
-            
+
             if (e.key.length === 1 && (e.key.match(/[a-zA-Z0-9]/) || e.key === '-')) {
                 this.scannerBuffer += e.key;
-                
+
                 if (this.scannerTimeout) clearTimeout(this.scannerTimeout);
-                
+
                 this.scannerTimeout = setTimeout(async () => {
                     if (this.scannerBuffer.length >= 4) {
                         await this.buscarPorCodigoEscanner(this.scannerBuffer);
@@ -154,7 +154,7 @@ class POSSystem {
                     this.scannerBuffer = '';
                 }, 100);
             }
-            
+
             if (e.key === 'Enter' && this.scannerBuffer.length > 0) {
                 e.preventDefault();
                 if (this.scannerTimeout) clearTimeout(this.scannerTimeout);
@@ -166,21 +166,21 @@ class POSSystem {
 
     async buscarPorCodigoEscanner(codigo) {
         if (!codigo || this.cargando) return;
-        
+
         const inputBusqueda = document.getElementById('codigoBarras');
         if (inputBusqueda) {
             inputBusqueda.value = codigo;
         }
-        
+
         try {
             const response = await fetch(this.apiUrl + '?accion=buscarPorCodigo&codigo=' + encodeURIComponent(codigo));
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const producto = await response.json();
-            
+
             if (producto && producto.id) {
                 await this.agregarAlCarrito(producto.id, 1);
                 if (inputBusqueda) {
@@ -205,14 +205,14 @@ class POSSystem {
     agregarEfectoFeedback(tipo) {
         const feedback = document.createElement('div');
         feedback.className = `scanner-feedback scanner-${tipo}`;
-        feedback.innerHTML = tipo === 'success' ? 
-            '<i class="fas fa-check-circle" aria-hidden="true"></i> Producto agregado' : 
+        feedback.innerHTML = tipo === 'success' ?
+            '<i class="fas fa-check-circle" aria-hidden="true"></i> Producto agregado' :
             '<i class="fas fa-times-circle" aria-hidden="true"></i> Producto no encontrado';
         feedback.setAttribute('role', 'status');
         feedback.setAttribute('aria-live', 'polite');
-        
+
         document.body.appendChild(feedback);
-        
+
         setTimeout(() => {
             feedback.classList.add('show');
             setTimeout(() => {
@@ -229,7 +229,7 @@ class POSSystem {
     async cachedFetch(url, options = {}, ttl = 30000) {
         const key = url + JSON.stringify(options);
         const cached = this.cache.get(key);
-        
+
         if (cached && Date.now() - cached.timestamp < ttl) {
             return cached.data;
         }
@@ -237,7 +237,7 @@ class POSSystem {
         try {
             const response = await fetch(url, options);
             const data = await response.json();
-            
+
             this.cache.set(key, {
                 data,
                 timestamp: Date.now()
@@ -255,7 +255,7 @@ class POSSystem {
         if (tokenMeta) {
             return tokenMeta.getAttribute('content');
         }
-        
+
         try {
             const response = await fetch(this.apiUrl + '?accion=getCsrfToken');
             const data = await response.json();
@@ -265,20 +265,20 @@ class POSSystem {
         } catch (error) {
             console.error('Error obteniendo CSRF token:', error);
         }
-        
+
         return '';
     }
 
     async postWithCsrf(url, formData) {
         const csrfToken = await this.obtenerCsrfToken();
         formData.append('csrf_token', csrfToken);
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
+
         try {
-            const response = await fetch(url, { 
-                method: 'POST', 
+            const response = await fetch(url, {
+                method: 'POST',
                 body: formData,
                 signal: controller.signal
             });
@@ -301,7 +301,7 @@ class POSSystem {
                     this.procesarVenta();
                 }
             }
-            
+
             if (e.ctrlKey && e.key === 'l') {
                 e.preventDefault();
                 if (this.carrito.length > 0) {
@@ -310,12 +310,12 @@ class POSSystem {
                     }
                 }
             }
-            
+
             if (e.ctrlKey && e.key === 'b') {
                 e.preventDefault();
                 document.getElementById('codigoBarras')?.focus();
             }
-            
+
             if (e.key === 'Escape') {
                 const input = document.getElementById('codigoBarras');
                 if (input === document.activeElement) {
@@ -323,7 +323,7 @@ class POSSystem {
                     document.getElementById('sugerencias')?.classList.remove('active');
                 }
             }
-            
+
             if (e.key === 'F1') {
                 e.preventDefault();
                 this.mostrarAyudaAtajos();
@@ -338,13 +338,13 @@ class POSSystem {
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-label', 'Atajos de teclado');
-        
+
         modal.innerHTML = `
             <div class="modal-contenido" style="max-width: 500px;">
                 <h3 style="color: var(--primary); margin-bottom: 1.5rem;">
                     <i class="fas fa-keyboard" aria-hidden="true"></i> Atajos de Teclado
                 </h3>
-                
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div><strong>Enter</strong> en búsqueda</div><div>Agregar producto</div>
                     <div><strong>Ctrl + P</strong></div><div>Procesar venta</div>
@@ -354,20 +354,20 @@ class POSSystem {
                     <div><strong>Flechas ↑↓</strong></div><div>Navegar sugerencias</div>
                     <div><strong>F1</strong></div><div>Mostrar ayuda</div>
                 </div>
-                
+
                 <div style="margin-top: 2rem; padding: 1rem; background: var(--light); border-radius: var(--radius-md);">
                     <p><i class="fas fa-info-circle" aria-hidden="true"></i> También puedes hacer clic en los productos para agregarlos al carrito</p>
                 </div>
-                
-                <button class="btn-cerrar-atajos" 
+
+                <button class="btn-cerrar-atajos"
                         style="width: 100%; margin-top: 1.5rem; padding: 1rem; background: var(--primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer;">
                     <i class="fas fa-check" aria-hidden="true"></i> Cerrar
                 </button>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
+
         modal.querySelector('.btn-cerrar-atajos').addEventListener('click', () => {
             modal.remove();
         });
@@ -385,10 +385,10 @@ class POSSystem {
     async verificarCajaAntesDeVender() {
         if (this.verificandoCaja) return false;
         this.verificandoCaja = true;
-        
+
         try {
             const data = await this.cachedFetch(this.apiUrl + '?accion=getEstadoCaja', {}, 5000);
-            
+
             if (data.success) {
                 if (!data.caja_abierta) {
                     this.mostrarNotificacion('Debe abrir la caja antes de realizar ventas', 'warning');
@@ -409,17 +409,45 @@ class POSSystem {
         }
     }
 
+    // ─── Helpers para mostrar / ocultar el carrito ────────────────────────
+    _mostrarCarrito() {
+        const carritoPanel = document.querySelector('.carrito-panel');
+        if (carritoPanel) {
+            carritoPanel.style.display = '';
+        }
+        const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
+        if (toggleCarrito) toggleCarrito.style.display = '';
+    }
+
+    _ocultarCarrito() {
+        const carritoPanel = document.querySelector('.carrito-panel');
+        if (carritoPanel) {
+            carritoPanel.classList.remove('visible');
+            carritoPanel.style.display = 'none';
+        }
+        const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
+        if (toggleCarrito) toggleCarrito.style.display = 'none';
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     initModulos() {
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 const modulo = e.currentTarget.dataset.modulo;
-                
+
                 document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
                 e.currentTarget.classList.add('active');
-                
+
                 document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');
-                
+
+                // Si salimos del módulo de productos, restaurar el carrito
+                if (modulo !== 'productos') {
+                    this._mostrarCarrito();
+                }
+
                 if (modulo === 'caja') {
+                    // Ocultar carrito en el módulo de caja también
+                    this._ocultarCarrito();
                     if (window.moduloCaja) {
                         window.moduloCaja.mostrarModulo();
                     }
@@ -432,9 +460,15 @@ class POSSystem {
                             document.getElementById('codigoBarras')?.focus();
                         }, 100);
                     }
+                } else if (modulo === 'productos') {
+                    // Ocultar carrito en el módulo de productos
+                    this._ocultarCarrito();
+                    if (window.moduloProductos) {
+                        window.moduloProductos.mostrarModulo();
+                    }
                 }
             });
-            
+
             item.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     e.currentTarget.click();
@@ -458,19 +492,19 @@ class POSSystem {
     async cargarProductosDesdeBD() {
         this.startMeasure('cargarProductos');
         this.mostrarCargando(true);
-        
+
         try {
             const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
             const response = await fetch(url);
             const data = await response.json();
-            
+
             this.productos = data;
-            
+
             requestAnimationFrame(() => {
                 this.mostrarProductos(this.productos);
                 this.mostrarNotificacion('📦 Stock actualizado', 'success');
             });
-            
+
         } catch (error) {
             console.error('Error cargando productos:', error);
             this.mostrarNotificacion('Error al cargar productos: ' + error.message, 'error');
@@ -481,56 +515,56 @@ class POSSystem {
     }
 
     async recargarProductos() {
-    try {
-        const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        this.productos = data;
-        
-        const categoriaActivaActual = this.categoriaActiva;
-        const moduloVisible = document.getElementById('seccionPuntoVenta')?.style.display === 'block';
-        
-        if (moduloVisible) {
-            await this.filtrarProductos();
-            this.categoriaActiva = categoriaActivaActual;
-            
-            const filtros = document.querySelectorAll('.filtro-btn');
-            filtros.forEach(btn => {
-                if (btn.textContent === categoriaActivaActual) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
-        
-        const carritoActual = this.carrito;
-        if (carritoActual && carritoActual.length > 0) {
-            for (const item of carritoActual) {
-                const productoActualizado = this.productos.find(p => p.id === item.id);
-                if (productoActualizado) {
-                    const cantidadCarrito = item.cantidad;
-                    if (cantidadCarrito > productoActualizado.stock_actual) {
-                        await this.modificarCantidad(item.id, productoActualizado.stock_actual);
-                        this.mostrarNotificacion(`⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`, 'warning');
+        try {
+            const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+            const response = await fetch(url);
+            const data = await response.json();
+
+            this.productos = data;
+
+            const categoriaActivaActual = this.categoriaActiva;
+            const moduloVisible = document.getElementById('seccionPuntoVenta')?.style.display === 'block';
+
+            if (moduloVisible) {
+                await this.filtrarProductos();
+                this.categoriaActiva = categoriaActivaActual;
+
+                const filtros = document.querySelectorAll('.filtro-btn');
+                filtros.forEach(btn => {
+                    if (btn.textContent === categoriaActivaActual) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            }
+
+            const carritoActual = this.carrito;
+            if (carritoActual && carritoActual.length > 0) {
+                for (const item of carritoActual) {
+                    const productoActualizado = this.productos.find(p => p.id === item.id);
+                    if (productoActualizado) {
+                        const cantidadCarrito = item.cantidad;
+                        if (cantidadCarrito > productoActualizado.stock_actual) {
+                            await this.modificarCantidad(item.id, productoActualizado.stock_actual);
+                            this.mostrarNotificacion(`⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`, 'warning');
+                        }
                     }
                 }
             }
+
+            if (window.moduloProductos) {
+                window.moduloProductos.cargarProductos();
+            }
+        } catch (error) {
+            console.error('Error recargando productos:', error);
         }
-        
-        if (window.moduloProductos) {
-            window.moduloProductos.cargarProductos();
-        }
-    } catch (error) {
-        console.error('Error recargando productos:', error);
     }
-}
 
     mostrarCargando(mostrar) {
         const grid = document.getElementById('productosGrid');
         if (!grid) return;
-        
+
         if (mostrar) {
             grid.innerHTML = `
                 <div style="grid-column: 1/-1; text-align: center; padding: 3rem;">
@@ -538,7 +572,7 @@ class POSSystem {
                     <p style="margin-top: 1rem; color: var(--gray);">Cargando productos...</p>
                 </div>
             `;
-            
+
             if (!document.getElementById('spinner-style')) {
                 const style = document.createElement('style');
                 style.id = 'spinner-style';
@@ -564,21 +598,21 @@ class POSSystem {
     async agregarAlCarrito(productoId, cantidad = 1) {
         const cajaAbierta = await this.verificarCajaAntesDeVender();
         if (!cajaAbierta) return;
-        
+
         if (this.cargando) return;
         this.cargando = true;
-        
+
         this.startMeasure('agregarAlCarrito');
-        
+
         try {
             const formData = new FormData();
             formData.append('accion', 'agregarCarrito');
             formData.append('producto_id', productoId);
             formData.append('cantidad', cantidad);
-            
+
             const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
-            
+
             if (data.success) {
                 this.carrito = data.carrito.items;
                 requestAnimationFrame(() => {
@@ -595,13 +629,13 @@ class POSSystem {
         } finally {
             this.cargando = false;
             this.endMeasure('agregarAlCarrito');
-            
+
             const sugerencias = document.getElementById('sugerencias');
             if (sugerencias) {
                 sugerencias.classList.remove('active');
                 sugerencias.innerHTML = '';
             }
-            
+
             const input = document.getElementById('codigoBarras');
             if (input) input.value = '';
         }
@@ -610,25 +644,25 @@ class POSSystem {
     async buscarSugerencias(termino) {
         const sugerenciasDiv = document.getElementById('sugerencias');
         if (!sugerenciasDiv) return;
-        
+
         if (termino.length < 2) {
             sugerenciasDiv.classList.remove('active');
             sugerenciasDiv.innerHTML = '';
             return;
         }
-        
+
         try {
             const response = await fetch(this.apiUrl + '?accion=buscarProductos&termino=' + encodeURIComponent(termino));
             const productos = await response.json();
-            
+
             if (productos.length === 0) {
                 sugerenciasDiv.innerHTML = '<div class="sugerencia-item" style="justify-content: center;">No se encontraron productos</div>';
                 sugerenciasDiv.classList.add('active');
                 return;
             }
-            
+
             const fragment = document.createDocumentFragment();
-            
+
             productos.slice(0, 8).forEach(producto => {
                 const item = document.createElement('div');
                 item.className = 'sugerencia-item';
@@ -636,7 +670,7 @@ class POSSystem {
                 item.tabIndex = 0;
                 item.role = 'option';
                 item.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio).toFixed(2)}`);
-                
+
                 item.innerHTML = `
                     <div class="sugerencia-info">
                         <div class="sugerencia-nombre">${this.escapeHTML(producto.nombre)}</div>
@@ -650,14 +684,14 @@ class POSSystem {
                     </div>
                     <div class="sugerencia-precio">$${parseFloat(producto.precio).toFixed(2)}</div>
                 `;
-                
+
                 fragment.appendChild(item);
             });
-            
+
             sugerenciasDiv.innerHTML = '';
             sugerenciasDiv.appendChild(fragment);
             sugerenciasDiv.classList.add('active');
-            
+
             sugerenciasDiv.querySelectorAll('.sugerencia-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const productoId = item.dataset.id;
@@ -665,7 +699,7 @@ class POSSystem {
                         this.agregarAlCarrito(parseInt(productoId));
                     }
                 });
-                
+
                 item.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         const productoId = item.dataset.id;
@@ -675,7 +709,7 @@ class POSSystem {
                     }
                 });
             });
-            
+
         } catch (error) {
             console.error('Error en sugerencias:', error);
         }
@@ -702,25 +736,25 @@ class POSSystem {
     async modificarCantidad(productoId, cantidad) {
         if (this.cargando) return;
         this.cargando = true;
-        
+
         try {
             const formData = new FormData();
             formData.append('accion', 'modificarCarrito');
             formData.append('producto_id', productoId);
             formData.append('cantidad', cantidad);
-            
+
             const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
-            
+
             if (data.success === false && data.message && data.message.includes('Stock insuficiente')) {
                 this.mostrarNotificacion(`❌ ${data.message}`, 'error');
                 this.cargando = false;
                 return;
             }
-            
+
             this.carrito = data.items;
             this.renderizarCarrito(data);
-            
+
         } catch (error) {
             console.error('Error:', error);
             this.mostrarNotificacion('Error al modificar: ' + error.message, 'error');
@@ -733,12 +767,12 @@ class POSSystem {
     async eliminarDelCarrito(productoId) {
         if (this.cargando) return;
         this.cargando = true;
-        
+
         try {
             const formData = new FormData();
             formData.append('accion', 'eliminarCarrito');
             formData.append('producto_id', productoId);
-            
+
             const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             this.carrito = data.items;
@@ -756,11 +790,11 @@ class POSSystem {
     async vaciarCarrito() {
         if (this.cargando) return;
         this.cargando = true;
-        
+
         try {
             const formData = new FormData();
             formData.append('accion', 'vaciarCarrito');
-            
+
             const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
             this.carrito = data.items;
@@ -777,15 +811,15 @@ class POSSystem {
     async filtrarProductos() {
         this.startMeasure('filtrarProductos');
         this.mostrarCargando(true);
-        
+
         try {
             const response = await fetch(this.apiUrl + '?accion=getProductosPorCategoria&categoria=' + encodeURIComponent(this.categoriaActiva));
             const productos = await response.json();
-            
+
             requestAnimationFrame(() => {
                 this.mostrarProductos(productos);
             });
-            
+
         } catch (error) {
             console.error('Error filtrando:', error);
             this.mostrarNotificacion('Error al filtrar: ' + error.message, 'error');
@@ -798,14 +832,14 @@ class POSSystem {
     mostrarProductos(productos) {
         const grid = document.getElementById('productosGrid');
         if (!grid) return;
-        
+
         if (productos.length === 0) {
             grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--gray);">No hay productos disponibles</div>';
             return;
         }
-        
+
         const fragment = document.createDocumentFragment();
-        
+
         productos.forEach(producto => {
             const card = document.createElement('div');
             card.className = 'producto-card';
@@ -813,10 +847,10 @@ class POSSystem {
             card.tabIndex = 0;
             card.role = 'button';
             card.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio).toFixed(2)} - Stock: ${producto.stock_actual}`);
-            
+
             let stockClass = 'stock';
             let stockText = `${producto.stock_actual} disponibles`;
-            
+
             if (producto.stock_actual <= 0) {
                 stockClass += ' stock-agotado';
                 stockText = '❌ AGOTADO';
@@ -827,7 +861,7 @@ class POSSystem {
                 stockClass += ' stock-bajo';
                 stockText = `⚠️ Quedan ${producto.stock_actual}`;
             }
-            
+
             card.innerHTML = `
                 <h3>${this.escapeHTML(producto.nombre)}</h3>
                 <div class="precio">$${parseFloat(producto.precio).toFixed(2)}</div>
@@ -836,13 +870,13 @@ class POSSystem {
                 </div>
                 <small>${this.escapeHTML(producto.descripcion || '')}</small>
             `;
-            
+
             fragment.appendChild(card);
         });
-        
+
         grid.innerHTML = '';
         grid.appendChild(fragment);
-        
+
         grid.addEventListener('click', (e) => {
             const card = e.target.closest('.producto-card');
             if (card && card.dataset.id && card.getAttribute('aria-disabled') !== 'true') {
@@ -854,7 +888,7 @@ class POSSystem {
                 }
             }
         });
-        
+
         grid.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 const card = e.target.closest('.producto-card');
@@ -866,7 +900,7 @@ class POSSystem {
                 }
             }
         });
-        
+
         if (this.observer) {
             grid.querySelectorAll('.producto-card').forEach(card => {
                 this.observer.observe(card);
@@ -877,10 +911,10 @@ class POSSystem {
     renderizarCarrito(data) {
         const container = document.getElementById('carritoItems');
         if (!container) return;
-        
+
         const subtotal = parseFloat(data.subtotal) || 0;
         const total = parseFloat(data.total) || 0;
-        
+
         if (!data.items || data.items.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 2rem; color: var(--gray);">
@@ -889,32 +923,32 @@ class POSSystem {
                     <p style="font-size: 0.9rem; margin-top: 0.5rem;">Agregue productos para comenzar</p>
                 </div>
             `;
-            
+
             const btnVaciar = document.querySelector('.btn-vaciar-carrito');
             if (btnVaciar) btnVaciar.style.display = 'none';
-            
+
             const subtotalSpan = document.getElementById('subtotal');
             if (subtotalSpan) subtotalSpan.textContent = '$0.00';
-            
+
             const totalSpan = document.getElementById('total');
             if (totalSpan) totalSpan.textContent = '$0.00';
-            
+
             const btnProcesar = document.getElementById('btnProcesar');
             if (btnProcesar) {
                 btnProcesar.disabled = true;
                 btnProcesar.setAttribute('aria-disabled', 'true');
             }
-            
+
             return;
         }
-        
+
         const fragment = document.createDocumentFragment();
-        
+
         data.items.forEach(item => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'carrito-item';
             itemDiv.setAttribute('aria-label', `${item.nombre} - ${item.cantidad} unidades - $${parseFloat(item.subtotal).toFixed(2)}`);
-            
+
             itemDiv.innerHTML = `
                 <div class="item-info">
                     <h4>${this.escapeHTML(item.nombre)}</h4>
@@ -939,27 +973,27 @@ class POSSystem {
             `;
             fragment.appendChild(itemDiv);
         });
-        
+
         container.innerHTML = '';
         container.appendChild(fragment);
-        
+
         const subtotalSpan = document.getElementById('subtotal');
         if (subtotalSpan) subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
-        
+
         const totalSpan = document.getElementById('total');
         if (totalSpan) totalSpan.textContent = `$${total.toFixed(2)}`;
-        
+
         const btnProcesar = document.getElementById('btnProcesar');
         if (btnProcesar) {
             btnProcesar.disabled = false;
             btnProcesar.setAttribute('aria-disabled', 'false');
         }
-        
+
         const btnVaciar = document.querySelector('.btn-vaciar-carrito');
         if (btnVaciar) btnVaciar.style.display = 'flex';
-        
+
         this.calcularCambio();
-        
+
         container.querySelectorAll('.btn-decrement, .btn-increment, .btn-eliminar').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -973,7 +1007,7 @@ class POSSystem {
                 }
             });
         });
-        
+
         container.querySelectorAll('.cantidad-input').forEach(input => {
             input.addEventListener('change', (e) => {
                 const id = parseInt(input.dataset.id);
@@ -986,80 +1020,74 @@ class POSSystem {
     async procesarVenta() {
         const cajaAbierta = await this.verificarCajaAntesDeVender();
         if (!cajaAbierta) return;
-        
+
         if (this.carrito.length === 0) {
             this.mostrarNotificacion('❌ El carrito está vacío', 'warning');
             return;
         }
-        
+
         if (!this.metodoPagoActivo) {
             this.mostrarNotificacion('❌ Seleccione un método de pago', 'warning');
             return;
         }
-        
+
         this.startMeasure('procesarVenta');
-        
+
         if (this.metodoPagoActivo === 'Efectivo') {
             const efectivoInput = document.getElementById('efectivoRecibido');
             const efectivo = parseFloat(efectivoInput?.value);
             const total = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
-            
+
             if (!efectivoInput?.value || efectivoInput.value.trim() === '') {
                 this.mostrarNotificacion('⚠️ Ingrese la cantidad de efectivo recibido', 'warning');
                 efectivoInput.focus();
                 efectivoInput.style.borderColor = 'var(--danger)';
-                setTimeout(() => {
-                    efectivoInput.style.borderColor = 'var(--light)';
-                }, 2000);
+                setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
                 return;
             }
-            
+
             if (isNaN(efectivo) || efectivo <= 0) {
                 this.mostrarNotificacion('❌ La cantidad de efectivo no es válida', 'error');
                 efectivoInput.focus();
                 efectivoInput.style.borderColor = 'var(--danger)';
                 efectivoInput.value = '';
-                setTimeout(() => {
-                    efectivoInput.style.borderColor = 'var(--light)';
-                }, 2000);
+                setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
                 return;
             }
-            
+
             if (efectivo < total) {
                 const faltante = total - efectivo;
                 this.mostrarNotificacion(`❌ Efectivo insuficiente. Faltan: $${faltante.toFixed(2)}`, 'error');
                 efectivoInput.focus();
                 efectivoInput.style.borderColor = 'var(--danger)';
-                setTimeout(() => {
-                    efectivoInput.style.borderColor = 'var(--light)';
-                }, 2000);
+                setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
                 return;
             }
         }
-        
+
         this.cargando = true;
-        
+
         try {
             const subtotal = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
             const total = subtotal;
-            
+
             let efectivoRecibido = null;
             let cambio = null;
-            
+
             if (this.metodoPagoActivo === 'Efectivo') {
                 efectivoRecibido = parseFloat(document.getElementById('efectivoRecibido')?.value);
                 cambio = efectivoRecibido - total;
             }
-            
+
             const formData = new FormData();
             formData.append('accion', 'procesarVenta');
             formData.append('metodo_pago', this.metodoPagoActivo);
             if (efectivoRecibido !== null) formData.append('efectivo_recibido', efectivoRecibido);
             if (cambio !== null) formData.append('cambio', cambio);
-            
+
             const response = await this.postWithCsrf(this.apiUrl, formData);
             const data = await response.json();
-            
+
             if (data.success) {
                 const venta = {
                     folio: data.folio,
@@ -1071,13 +1099,13 @@ class POSSystem {
                     efectivo_recibido: efectivoRecibido ? parseFloat(efectivoRecibido) : null,
                     cambio: cambio ? parseFloat(cambio) : null
                 };
-                
+
                 if (window.ticketPrinter) {
                     await window.ticketPrinter.printTicket(venta, true);
                 } else {
                     this.mostrarTicket(venta);
                 }
-                
+
                 if (this.metodoPagoActivo === 'Efectivo') {
                     if (cambio > 0) {
                         this.mostrarNotificacion(`✅ Venta procesada. Cambio: $${cambio.toFixed(2)}`, 'success');
@@ -1087,77 +1115,67 @@ class POSSystem {
                 } else {
                     this.mostrarNotificacion(`✅ Venta procesada con ${this.metodoPagoActivo}`, 'success');
                 }
-                
+
                 const cacheKey = this.apiUrl + '?accion=getProductos';
                 this.cache.delete(cacheKey);
-                
+
                 await this.cargarProductosDesdeBD();
-                
+
                 this.carrito = [];
-                
+
                 const vaciarFormData = new FormData();
                 vaciarFormData.append('accion', 'vaciarCarrito');
                 await this.postWithCsrf(this.apiUrl, vaciarFormData);
-                
+
                 const carritoVacio = { items: [], subtotal: 0, total: 0 };
                 this.renderizarCarrito(carritoVacio);
-                
+
                 this.metodoPagoActivo = null;
                 document.querySelectorAll('.metodo-pago-btn').forEach(b => {
                     b.classList.remove('active');
                     b.setAttribute('aria-checked', 'false');
                 });
-                
+
                 const efectivoSection = document.getElementById('efectivoSection');
-                if (efectivoSection) {
-                    efectivoSection.style.display = 'none';
-                }
-                
+                if (efectivoSection) efectivoSection.style.display = 'none';
+
                 const efectivoRecibidoInput = document.getElementById('efectivoRecibido');
-                if (efectivoRecibidoInput) {
-                    efectivoRecibidoInput.value = '';
-                }
-                
+                if (efectivoRecibidoInput) efectivoRecibidoInput.value = '';
+
                 const cambioSpan = document.getElementById('cambio');
                 if (cambioSpan) {
                     cambioSpan.textContent = '$0.00';
                     cambioSpan.style.color = 'var(--gray)';
                 }
-                
+
                 const subtotalSpan = document.getElementById('subtotal');
-                if (subtotalSpan) {
-                    subtotalSpan.textContent = '$0.00';
-                }
-                
+                if (subtotalSpan) subtotalSpan.textContent = '$0.00';
+
                 const totalSpan = document.getElementById('total');
-                if (totalSpan) {
-                    totalSpan.textContent = '$0.00';
-                }
-                
+                if (totalSpan) totalSpan.textContent = '$0.00';
+
                 const btnProcesar = document.getElementById('btnProcesar');
                 if (btnProcesar) {
                     btnProcesar.disabled = true;
                     btnProcesar.setAttribute('aria-disabled', 'true');
                 }
-                
+
                 const btnVaciar = document.querySelector('.btn-vaciar-carrito');
-                if (btnVaciar) {
-                    btnVaciar.style.display = 'none';
-                }
-                
+                if (btnVaciar) btnVaciar.style.display = 'none';
+
                 if (window.moduloCaja) {
                     window.moduloCaja.verificarEstadoCaja();
                     if (document.querySelector('.menu-item.active')?.dataset.modulo === 'caja') {
                         window.moduloCaja.actualizarUI();
                     }
                 }
-                
+
                 const inputBusqueda = document.getElementById('codigoBarras');
                 if (inputBusqueda) {
                     inputBusqueda.value = '';
                     inputBusqueda.focus();
                 }
-                
+
             } else {
                 this.mostrarNotificacion(`❌ ${data.message || 'Error al procesar venta'}`, 'error');
             }
@@ -1177,7 +1195,7 @@ class POSSystem {
                 if (e.key === 'Enter') {
                     const sugerencias = document.getElementById('sugerencias');
                     const activeItem = sugerencias?.querySelector('.sugerencia-item.active');
-                    
+
                     if (activeItem) {
                         const productoId = activeItem.dataset.id;
                         if (productoId) {
@@ -1189,7 +1207,7 @@ class POSSystem {
                 }
             });
         }
-        
+
         document.querySelectorAll('.filtro-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
@@ -1198,72 +1216,72 @@ class POSSystem {
                 this.filtrarProductos();
             });
         });
-        
+
         document.querySelectorAll('.metodo-pago-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
-                
+
                 const metodo = e.currentTarget.dataset.metodo;
-                
+
                 document.querySelectorAll('.metodo-pago-btn').forEach(b => {
                     b.classList.remove('active');
                     b.setAttribute('aria-checked', 'false');
                 });
-                
+
                 e.currentTarget.classList.add('active');
                 e.currentTarget.setAttribute('aria-checked', 'true');
                 this.metodoPagoActivo = metodo;
-                
+
                 const efectivoSection = document.getElementById('efectivoSection');
                 if (efectivoSection) {
                     efectivoSection.style.display = metodo === 'Efectivo' ? 'block' : 'none';
-                    
+
                     if (metodo === 'Efectivo') {
                         setTimeout(() => {
                             document.getElementById('efectivoRecibido')?.focus();
                         }, 100);
                     }
                 }
-                
+
                 const btnProcesar = document.getElementById('btnProcesar');
                 if (btnProcesar) {
                     btnProcesar.disabled = this.carrito.length === 0;
                 }
-                
+
                 this.mostrarNotificacion(`Método de pago: ${metodo}`, 'success');
             });
         });
-        
+
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (efectivoInput) {
             efectivoInput.addEventListener('input', () => {
                 this.calcularCambio();
             });
-            
+
             efectivoInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     this.procesarVenta();
                 }
             });
         }
-        
+
         const btnProcesar = document.getElementById('btnProcesar');
         if (btnProcesar) {
             btnProcesar.addEventListener('click', () => {
                 this.procesarVenta();
             });
         }
-        
+
         const btnVaciar = document.createElement('button');
         btnVaciar.className = 'btn-vaciar-carrito';
         btnVaciar.innerHTML = '<i class="fas fa-trash-alt" aria-hidden="true"></i> Vaciar';
         btnVaciar.setAttribute('aria-label', 'Vaciar carrito completo');
-        
+
         const carritoHeader = document.querySelector('.carrito-header');
         if (carritoHeader) {
             carritoHeader.style.position = 'relative';
             carritoHeader.appendChild(btnVaciar);
-            
+
             btnVaciar.addEventListener('click', () => {
                 if (this.carrito.length > 0) {
                     if (confirm('¿Está seguro de vaciar el carrito?')) {
@@ -1272,17 +1290,17 @@ class POSSystem {
                 }
             });
         }
-        
+
         this.initResponsive();
     }
 
     async buscarPorCodigo(termino) {
         if (!termino || this.cargando) return;
-        
+
         try {
             const response = await fetch(this.apiUrl + '?accion=buscarPorCodigo&codigo=' + encodeURIComponent(termino));
             const producto = await response.json();
-            
+
             if (producto && producto.id) {
                 await this.agregarAlCarrito(producto.id, 1);
             } else {
@@ -1296,38 +1314,38 @@ class POSSystem {
 
     initResponsive() {
         document.querySelectorAll('.toggle-carrito-mobile, .toggle-menu-mobile').forEach(el => el.remove());
-        
+
         const toggleCarrito = document.createElement('button');
         toggleCarrito.className = 'toggle-carrito-mobile';
         toggleCarrito.innerHTML = '<i class="fas fa-shopping-cart" aria-hidden="true"></i> <span>Ver Carrito</span>';
         toggleCarrito.setAttribute('aria-label', 'Abrir carrito de compras');
         document.body.appendChild(toggleCarrito);
-        
+
         toggleCarrito.addEventListener('click', () => {
             document.querySelector('.carrito-panel').classList.add('visible');
         });
-        
+
         const toggleMenu = document.createElement('button');
         toggleMenu.className = 'toggle-menu-mobile';
         toggleMenu.innerHTML = '<i class="fas fa-bars" aria-hidden="true"></i> <span>Menú</span>';
         toggleMenu.setAttribute('aria-label', 'Abrir menú');
         document.body.appendChild(toggleMenu);
-        
+
         toggleMenu.addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('mobile-visible');
         });
-        
+
         document.addEventListener('click', (e) => {
             const carrito = document.querySelector('.carrito-panel');
             const toggle = document.querySelector('.toggle-carrito-mobile');
-            
+
             if (carrito && carrito.classList.contains('visible')) {
-                if (!carrito.contains(e.target) && !toggle.contains(e.target)) {
+                if (!carrito.contains(e.target) && toggle && !toggle.contains(e.target)) {
                     carrito.classList.remove('visible');
                 }
             }
         });
-        
+
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', () => {
                 if (window.innerWidth <= 992) {
@@ -1339,7 +1357,7 @@ class POSSystem {
 
     agregarRippleEffect() {
         document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
-            button.addEventListener('click', function(e) {
+            button.addEventListener('click', function (e) {
                 if (getComputedStyle(this).position !== 'relative') {
                     this.style.position = 'relative';
                     this.style.overflow = 'hidden';
@@ -1367,9 +1385,9 @@ class POSSystem {
                 ripple.style.width = ripple.style.height = size + 'px';
                 ripple.style.left = x + 'px';
                 ripple.style.top = y + 'px';
-                
+
                 ripple.offsetHeight;
-                
+
                 ripple.style.transform = 'scale(4)';
                 ripple.style.opacity = '0';
 
@@ -1386,37 +1404,37 @@ class POSSystem {
     iniciarBuscadorPredictivo() {
         const inputBusqueda = document.getElementById('codigoBarras');
         const sugerenciasDiv = document.getElementById('sugerencias');
-        
+
         if (!inputBusqueda || !sugerenciasDiv) return;
-        
+
         inputBusqueda.addEventListener('input', (e) => {
             const termino = e.target.value.trim();
-            
+
             if (this.debounceTimer) clearTimeout(this.debounceTimer);
-            
+
             if (termino.length < 2) {
                 sugerenciasDiv.classList.remove('active');
                 sugerenciasDiv.innerHTML = '';
                 return;
             }
-            
+
             this.debounceTimer = setTimeout(() => {
                 this.buscarSugerencias(termino);
             }, 300);
         });
-        
+
         document.addEventListener('click', (e) => {
             if (!inputBusqueda.contains(e.target) && !sugerenciasDiv.contains(e.target)) {
                 sugerenciasDiv.classList.remove('active');
             }
         });
-        
+
         inputBusqueda.addEventListener('keydown', (e) => {
             const items = sugerenciasDiv.querySelectorAll('.sugerencia-item');
             if (items.length === 0) return;
-            
+
             const activeItem = sugerenciasDiv.querySelector('.sugerencia-item.active');
-            
+
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 if (!activeItem) {
@@ -1450,7 +1468,7 @@ class POSSystem {
     calcularCambio() {
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (!efectivoInput) return;
-        
+
         if (!efectivoInput.value || efectivoInput.value === '') {
             const cambioEl = document.getElementById('cambio');
             if (cambioEl) {
@@ -1459,11 +1477,11 @@ class POSSystem {
             }
             return;
         }
-        
+
         const efectivo = parseFloat(efectivoInput.value) || 0;
         const total = parseFloat(document.getElementById('total')?.textContent.replace('$', '')) || 0;
         const cambio = efectivo - total;
-        
+
         const cambioEl = document.getElementById('cambio');
         if (cambioEl) {
             if (cambio >= 0 && efectivo > 0) {
@@ -1482,16 +1500,16 @@ class POSSystem {
     mostrarTicket(venta) {
         const modal = document.getElementById('modalTicket');
         const contenido = document.getElementById('ticketContenido');
-        
+
         if (!modal || !contenido) return;
-        
+
         const itemsHTML = venta.items.map(item => `
             <div class="ticket-item">
                 <span>${item.cantidad}x ${this.escapeHTML(item.nombre)}</span>
                 <span>$${parseFloat(item.subtotal).toFixed(2)}</span>
             </div>
         `).join('');
-        
+
         let pagoHTML = '';
         if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
             pagoHTML = `
@@ -1505,7 +1523,7 @@ class POSSystem {
                 </div>
             `;
         }
-        
+
         contenido.innerHTML = `
             <div class="ticket">
                 <div class="ticket-header">
@@ -1538,38 +1556,26 @@ class POSSystem {
                 </div>
             </div>
         `;
-        
+
         modal.style.display = 'flex';
-        
+
         modal.onclick = (e) => {
             if (e.target === modal) {
                 modal.style.display = 'none';
             }
         };
-        
+
         const btnImprimir = document.createElement('button');
         btnImprimir.innerHTML = '<i class="fas fa-print" aria-hidden="true"></i> Imprimir';
         btnImprimir.style.cssText = `
-            margin-top: 1rem;
-            padding: 0.8rem;
-            width: 100%;
-            background: var(--secondary);
-            color: white;
-            border: none;
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            font-size: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
+            margin-top: 1rem; padding: 0.8rem; width: 100%;
+            background: var(--secondary); color: white; border: none;
+            border-radius: var(--radius-md); cursor: pointer; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
         `;
         btnImprimir.setAttribute('aria-label', 'Imprimir ticket');
-        
-        btnImprimir.onclick = () => {
-            window.print();
-        };
-        
+        btnImprimir.onclick = () => { window.print(); };
+
         contenido.appendChild(btnImprimir);
     }
 
@@ -1578,12 +1584,12 @@ class POSSystem {
         notificacion.className = `notificacion notificacion-${tipo}`;
         notificacion.setAttribute('role', 'alert');
         notificacion.setAttribute('aria-live', 'assertive');
-        
+
         let icono = '';
         if (tipo === 'success') icono = 'fa-check-circle';
         else if (tipo === 'error') icono = 'fa-exclamation-circle';
         else if (tipo === 'warning') icono = 'fa-exclamation-triangle';
-        
+
         notificacion.innerHTML = `
             <i class="fas ${icono}" aria-hidden="true"></i>
             <span style="flex: 1;">${mensaje}</span>
@@ -1591,35 +1597,26 @@ class POSSystem {
                 <i class="fas fa-times" aria-hidden="true"></i>
             </button>
         `;
-        
+
         const colores = {
             success: '#27AE60',
             error: '#E74C3C',
             warning: '#F39C12'
         };
-        
+
         notificacion.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 1rem 1.5rem;
-            background: ${colores[tipo] || '#333'};
-            color: white;
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-lg);
-            z-index: 3000;
+            position: fixed; top: 20px; right: 20px;
+            padding: 1rem 1.5rem; background: ${colores[tipo] || '#333'};
+            color: white; border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg); z-index: 3000;
             animation: slideInRight 0.3s, pulse 2s infinite;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            font-weight: 500;
-            max-width: 400px;
-            min-width: 300px;
+            display: flex; align-items: center; gap: 1rem;
+            font-weight: 500; max-width: 400px; min-width: 300px;
             border-left: 5px solid ${tipo === 'success' ? '#1e8449' : tipo === 'error' ? '#c0392b' : '#e67e22'};
         `;
-        
+
         document.body.appendChild(notificacion);
-        
+
         setTimeout(() => {
             if (document.body.contains(notificacion)) {
                 notificacion.style.animation = 'fadeOut 0.3s';
