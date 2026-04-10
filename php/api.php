@@ -3,15 +3,12 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-register_shutdown_function(function() {
+register_shutdown_function(function () {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
         if (ob_get_length()) ob_clean();
         header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false,
-            'message' => 'Error interno del servidor: ' . $error['message']
-        ]);
+        echo json_encode(['success' => false, 'message' => 'Error interno del servidor']);
         exit;
     }
 });
@@ -22,27 +19,55 @@ require_once 'carrito.php';
 require_once 'caja.php';
 require_once 'productos_admin.php';
 
-header('Content-Type: application/json');
-header('Cache-Control: no-cache, must-revalidate');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-cache, no-store, must-revalidate');
 header('X-Content-Type-Options: nosniff');
 
 if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
     ob_start('ob_gzhandler');
 }
 
+// ── Rate limiting simple basado en sesión ────────────────────────────────
+$accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
+$metodo = $_SERVER['REQUEST_METHOD'];
+
+if ($metodo === 'POST') {
+    $rateKey  = 'rate_' . ($accion ?: 'unknown');
+    $rateLimit = 60;
+    $rateWindow = 60;
+
+    if (!isset($_SESSION[$rateKey])) {
+        $_SESSION[$rateKey] = ['count' => 0, 'window_start' => time()];
+    }
+
+    $rate = &$_SESSION[$rateKey];
+    if (time() - $rate['window_start'] > $rateWindow) {
+        $rate = ['count' => 0, 'window_start' => time()];
+    }
+
+    $rate['count']++;
+    if ($rate['count'] > $rateLimit) {
+        http_response_code(429);
+        echo json_encode(['success' => false, 'message' => 'Demasiadas solicitudes. Intente más tarde.']);
+        exit;
+    }
+}
+
 if (!isset($conn) || !$conn) {
+    http_response_code(503);
     echo json_encode(['success' => false, 'message' => 'Error de conexión a la base de datos']);
     exit;
 }
 
+// ── Validar origen ────────────────────────────────────────────────────────
 $origen = $_SERVER['HTTP_REFERER'] ?? '';
-if (strpos($origen, $_SERVER['HTTP_HOST']) === false && $origen != '') {
+if (!empty($origen) && strpos($origen, $_SERVER['HTTP_HOST']) === false) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Origen no válido']);
     exit;
 }
 
-// Acciones que NO requieren validación CSRF (sólo GET)
+// ── Acciones sin CSRF (solo lectura GET) ──────────────────────────────────
 $acciones_sin_csrf = [
     'getProductos', 'buscarProductos', 'getProductosPorCategoria',
     'buscarPorCodigo', 'getCarrito', 'getEstadoCaja',
@@ -52,23 +77,31 @@ $acciones_sin_csrf = [
     'buscarVentaPorFolio', 'obtenerDetallesVenta'
 ];
 
+// ── Validar CSRF para POST ────────────────────────────────────────────────
+if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
+    $csrfToken = $_POST['csrf_token']
+        ?? $_SERVER['HTTP_X_CSRF_TOKEN']
+        ?? '';
+    if (!validarCsrfToken($csrfToken)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Token de seguridad inválido']);
+        exit;
+    }
+}
+
 $productos      = new Productos();
 $carrito        = new Carrito();
 $caja           = new Caja();
 $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
 
-$accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
-
-// Limpiar caché cuando se modifican datos
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($accion, [
+// ── Limpiar caché en escrituras ───────────────────────────────────────────
+if ($metodo === 'POST' && in_array($accion, [
     'registrarProducto', 'actualizarProducto', 'eliminarProducto', 'cancelarVenta'
 ])) {
-    $cache_files = glob(sys_get_temp_dir() . '/pos_cache_*getProductos*');
-    foreach ($cache_files as $file) {
-        @unlink($file);
-    }
+    array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
 }
 
+// ── TTL de caché por acción ───────────────────────────────────────────────
 $cache_ttl = [
     'getProductos'             => 300,
     'getProductosPorCategoria' => 300,
@@ -82,15 +115,19 @@ $cache_ttl = [
 $cache_key  = md5($_SERVER['REQUEST_URI']);
 $cache_file = sys_get_temp_dir() . '/pos_cache_' . $cache_key . '.json';
 
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($cache_ttl[$accion])) {
+if ($metodo === 'GET' && isset($cache_ttl[$accion])) {
     if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl[$accion]) {
+        // Cabecera de caché para el cliente
+        $age = time() - filemtime($cache_file);
+        header('Cache-Control: public, max-age=' . ($cache_ttl[$accion] - $age));
+        header('ETag: "' . md5_file($cache_file) . '"');
         readfile($cache_file);
         exit;
     }
 }
 
-function cacheResponse($data, $cache_file) {
-    file_put_contents($cache_file, json_encode($data));
+function cacheResponse(array $data, string $cache_file): void {
+    file_put_contents($cache_file, json_encode($data, JSON_UNESCAPED_UNICODE));
 }
 
 $response = null;
@@ -98,15 +135,13 @@ $response = null;
 try {
     switch ($accion) {
 
-        // ── CSRF ─────────────────────────────────────────────────────────────
         case 'getCsrfToken':
             $response = ['success' => true, 'token' => generarCsrfToken()];
             break;
 
-        // ── PRODUCTOS (lectura pública) ───────────────────────────────────────
         case 'getProductos':
             $response = $productos->todos();
-            if ($_SERVER['REQUEST_METHOD'] === 'GET') cacheResponse($response, $cache_file);
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'buscarProductos':
@@ -116,48 +151,38 @@ try {
             break;
 
         case 'getProductosPorCategoria':
-            $categoria        = $_GET['categoria'] ?? 'Todas';
             $categorias_valid = ['Todas','Acrílicas','Esmaltes','Selladores','Barniz','Aerosol','Impermeabilizante','Complementos'];
-            $categoria        = in_array($categoria, $categorias_valid) ? $categoria : 'Todas';
+            $categoria        = in_array($_GET['categoria'] ?? '', $categorias_valid) ? $_GET['categoria'] : 'Todas';
             $response         = $productos->porCategoria($categoria);
-            if ($_SERVER['REQUEST_METHOD'] === 'GET') cacheResponse($response, $cache_file);
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'buscarPorCodigo':
-            $codigo   = $_GET['codigo'] ?? '';
-            $codigo   = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $codigo), 0, 50);
+            $codigo   = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['codigo'] ?? ''), 0, 50);
             $response = $productos->buscarPorCodigo($codigo);
             break;
 
-        // ── CARRITO ───────────────────────────────────────────────────────────
         case 'agregarCarrito':
-            if (!isset($_POST['producto_id'])) {
-                $response = ['success' => false, 'message' => 'ID requerido'];
-                break;
-            }
+            if (!isset($_POST['producto_id'])) { $response = ['success' => false, 'message' => 'ID requerido']; break; }
             $producto_id = filter_var($_POST['producto_id'], FILTER_VALIDATE_INT);
-            $cantidad    = isset($_POST['cantidad']) ? filter_var($_POST['cantidad'], FILTER_VALIDATE_INT) : 1;
+            $cantidad    = filter_var($_POST['cantidad'] ?? 1, FILTER_VALIDATE_INT);
             if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID de producto inválido']; break; }
             if (!$cantidad || $cantidad <= 0) $cantidad = 1;
             $response = $carrito->agregar($producto_id, $cantidad);
             break;
 
         case 'modificarCarrito':
-            if (!isset($_POST['producto_id']) || !isset($_POST['cantidad'])) {
-                $response = ['success' => false, 'message' => 'Datos incompletos'];
-                break;
-            }
+            if (!isset($_POST['producto_id'], $_POST['cantidad'])) { $response = ['success' => false, 'message' => 'Datos incompletos']; break; }
             $producto_id = filter_var($_POST['producto_id'], FILTER_VALIDATE_INT);
             $cantidad    = filter_var($_POST['cantidad'], FILTER_VALIDATE_INT);
-            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID de producto inválido']; break; }
-            if ($cantidad === false || $cantidad < 0)  { $response = ['success' => false, 'message' => 'Cantidad inválida']; break; }
+            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID inválido']; break; }
+            if ($cantidad === false || $cantidad < 0) { $response = ['success' => false, 'message' => 'Cantidad inválida']; break; }
             $response = $carrito->modificar($producto_id, $cantidad);
             break;
 
         case 'eliminarCarrito':
-            if (!isset($_POST['producto_id'])) { $response = ['success' => false, 'message' => 'ID requerido']; break; }
-            $producto_id = filter_var($_POST['producto_id'], FILTER_VALIDATE_INT);
-            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID de producto inválido']; break; }
+            $producto_id = filter_var($_POST['producto_id'] ?? 0, FILTER_VALIDATE_INT);
+            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID inválido']; break; }
             $response = $carrito->eliminar($producto_id);
             break;
 
@@ -169,10 +194,9 @@ try {
             $response = $carrito->vaciar();
             break;
 
-        // ── VENTA ─────────────────────────────────────────────────────────────
         case 'procesarVenta':
             if (!isset($_POST['metodo_pago'])) { $response = ['success' => false, 'message' => 'Método de pago requerido']; break; }
-            $metodo_pago    = sanitize($_POST['metodo_pago']);
+            $metodo_pago     = sanitize($_POST['metodo_pago']);
             $metodos_validos = ['Efectivo', 'Tarjeta', 'Transferencia'];
             if (!in_array($metodo_pago, $metodos_validos)) { $response = ['success' => false, 'message' => 'Método de pago inválido']; break; }
             $efectivo = isset($_POST['efectivo_recibido']) ? filter_var($_POST['efectivo_recibido'], FILTER_VALIDATE_FLOAT) : null;
@@ -180,52 +204,40 @@ try {
             $response = $carrito->procesarVenta($metodo_pago, $efectivo, $cambio);
             break;
 
-        // ── CANCELAR TICKET ───────────────────────────────────────────────────
         case 'buscarVentaPorFolio':
-            // Acepta ?folio= (búsqueda parcial)
-            $termino  = $_GET['folio'] ?? $_GET['termino'] ?? '';
-            $termino  = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $termino), 0, 50);
-            if (empty($termino)) {
-                $response = ['success' => false, 'message' => 'Ingrese un folio o parte de él para buscar'];
-                break;
-            }
+            $termino = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['folio'] ?? $_GET['termino'] ?? ''), 0, 50);
+            if (empty($termino)) { $response = ['success' => false, 'message' => 'Ingrese un folio para buscar']; break; }
             $response = $carrito->buscarVentaPorFolio($termino);
             break;
 
         case 'obtenerDetallesVenta':
-            $venta_id = isset($_GET['venta_id']) ? filter_var($_GET['venta_id'], FILTER_VALIDATE_INT) : 0;
-            if (!$venta_id || $venta_id <= 0) {
-                $response = ['success' => false, 'message' => 'ID de venta inválido'];
-                break;
-            }
+            $venta_id = filter_var($_GET['venta_id'] ?? 0, FILTER_VALIDATE_INT);
+            if (!$venta_id || $venta_id <= 0) { $response = ['success' => false, 'message' => 'ID de venta inválido']; break; }
             $response = $carrito->obtenerDetallesVenta($venta_id);
             break;
 
         case 'cancelarVenta':
-            if (!isset($_POST['folio'])) { $response = ['success' => false, 'message' => 'Folio requerido']; break; }
-            $folio  = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_POST['folio']), 0, 30);
+            $folio  = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_POST['folio'] ?? ''), 0, 30);
             $motivo = isset($_POST['motivo']) ? substr(sanitize($_POST['motivo']), 0, 255) : 'Sin motivo';
             if (empty($folio)) { $response = ['success' => false, 'message' => 'Folio inválido']; break; }
             $response = $carrito->cancelarVenta($folio, $motivo);
-            if ($response['success']) {
-                $cache_files = glob(sys_get_temp_dir() . '/pos_cache_*.json');
-                foreach ($cache_files as $cf) @unlink($cf);
+            if (!empty($response['success'])) {
+                array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
             }
             break;
 
-        // ── CAJA ──────────────────────────────────────────────────────────────
         case 'getEstadoCaja':
             $response = $caja->obtenerEstado();
             break;
 
         case 'abrirCaja':
-            $monto_inicial = isset($_POST['monto_inicial']) ? filter_var($_POST['monto_inicial'], FILTER_VALIDATE_FLOAT) : 0;
+            $monto_inicial = filter_var($_POST['monto_inicial'] ?? 0, FILTER_VALIDATE_FLOAT);
             if ($monto_inicial === false || $monto_inicial < 0) { $response = ['success' => false, 'message' => 'Monto inicial inválido']; break; }
             $response = $caja->abrirCaja($monto_inicial);
             break;
 
         case 'cerrarCaja':
-            $monto_final   = isset($_POST['monto_final'])   ? filter_var($_POST['monto_final'], FILTER_VALIDATE_FLOAT) : 0;
+            $monto_final   = filter_var($_POST['monto_final'] ?? 0, FILTER_VALIDATE_FLOAT);
             $observaciones = isset($_POST['observaciones']) ? substr(sanitize($_POST['observaciones']), 0, 500) : '';
             if ($monto_final === false || $monto_final < 0) { $response = ['success' => false, 'message' => 'Monto final inválido']; break; }
             $response = $caja->cerrarCaja($monto_final, $observaciones);
@@ -233,10 +245,10 @@ try {
 
         case 'agregarGasto':
             $concepto   = isset($_POST['concepto'])   ? substr(sanitize($_POST['concepto']),   0, 255) : '';
-            $monto      = isset($_POST['monto'])       ? filter_var($_POST['monto'], FILTER_VALIDATE_FLOAT) : 0;
+            $monto      = filter_var($_POST['monto'] ?? 0, FILTER_VALIDATE_FLOAT);
             $referencia = isset($_POST['referencia']) ? substr(sanitize($_POST['referencia']), 0, 100) : '';
-            if (empty($concepto))                     { $response = ['success' => false, 'message' => 'Concepto requerido']; break; }
-            if ($monto === false || $monto <= 0)      { $response = ['success' => false, 'message' => 'Monto inválido'];    break; }
+            if (empty($concepto))                { $response = ['success' => false, 'message' => 'Concepto requerido']; break; }
+            if ($monto === false || $monto <= 0) { $response = ['success' => false, 'message' => 'Monto inválido'];    break; }
             $response = $caja->agregarGasto($concepto, $monto, $referencia);
             break;
 
@@ -247,46 +259,45 @@ try {
             break;
 
         case 'getDetalleCorte':
-            $corte_id = isset($_GET['corte_id']) ? filter_var($_GET['corte_id'], FILTER_VALIDATE_INT) : 0;
+            $corte_id = filter_var($_GET['corte_id'] ?? 0, FILTER_VALIDATE_INT);
             if (!$corte_id || $corte_id <= 0) { $response = ['success' => false, 'message' => 'ID de corte inválido']; break; }
             $response = $caja->obtenerDetalleCorte($corte_id);
             break;
 
-        // ── MÓDULO DE PRODUCTOS (admin) ───────────────────────────────────────
         case 'getProductosAdmin':
             if ($productosAdmin) {
                 $response = $productosAdmin->obtenerTodos();
-                if ($_SERVER['REQUEST_METHOD'] === 'GET') cacheResponse($response, $cache_file);
+                if ($metodo === 'GET') cacheResponse($response, $cache_file);
             } else {
-                $response = ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                $response = ['success' => false, 'message' => 'Módulo no disponible'];
             }
             break;
 
         case 'getProducto':
-            $id = $_GET['id'] ?? 0;
+            $id = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT);
             $response = $productosAdmin
                 ? $productosAdmin->obtenerPorId($id)
-                : ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'registrarProducto':
             $response = $productosAdmin
                 ? $productosAdmin->registrar($_POST)
-                : ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'actualizarProducto':
-            $id = $_POST['id'] ?? 0;
+            $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
             $response = $productosAdmin
                 ? $productosAdmin->actualizar($id, $_POST)
-                : ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'eliminarProducto':
-            $id = $_POST['id'] ?? 0;
+            $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
             $response = $productosAdmin
                 ? $productosAdmin->eliminar($id)
-                : ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'buscarProductosAdmin':
@@ -294,36 +305,35 @@ try {
             $categoria = $_GET['categoria'] ?? null;
             $response  = $productosAdmin
                 ? $productosAdmin->buscar($termino, $categoria)
-                : ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'getProductosEstadisticas':
             if ($productosAdmin) {
                 $response = $productosAdmin->obtenerEstadisticas();
-                if ($_SERVER['REQUEST_METHOD'] === 'GET') cacheResponse($response, $cache_file);
+                if ($metodo === 'GET') cacheResponse($response, $cache_file);
             } else {
-                $response = ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                $response = ['success' => false, 'message' => 'Módulo no disponible'];
             }
             break;
 
         case 'getCategoriasConConteo':
             if ($productosAdmin) {
                 $response = $productosAdmin->obtenerCategoriasConConteo();
-                if ($_SERVER['REQUEST_METHOD'] === 'GET') cacheResponse($response, $cache_file);
+                if ($metodo === 'GET') cacheResponse($response, $cache_file);
             } else {
-                $response = ['success' => false, 'message' => 'Módulo de productos no disponible'];
+                $response = ['success' => false, 'message' => 'Módulo no disponible'];
             }
             break;
 
-        // ── DEFAULT ───────────────────────────────────────────────────────────
         default:
             http_response_code(400);
-            $response = ['error' => 'Acción no válida: ' . htmlspecialchars($accion)];
+            $response = ['success' => false, 'error' => 'Acción no válida'];
     }
 
 } catch (Exception $e) {
-    error_log("Error en API: " . $e->getMessage());
-    $response = ['success' => false, 'message' => 'Error interno: ' . $e->getMessage()];
+    error_log("Error en API [{$accion}]: " . $e->getMessage());
+    $response = ['success' => false, 'message' => 'Error interno del servidor'];
 }
 
 if (!is_array($response)) {
@@ -332,11 +342,10 @@ if (!is_array($response)) {
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
-// Limpiar caché antiguo (1 % de probabilidad)
+// Limpieza de caché antigua (1 % de probabilidad)
 if (rand(1, 100) === 1) {
-    $cache_files = glob(sys_get_temp_dir() . '/pos_cache_*.json');
     $now = time();
-    foreach ($cache_files as $file) {
+    foreach (glob(sys_get_temp_dir() . '/pos_cache_*.json') as $file) {
         if ($now - filemtime($file) > 3600) @unlink($file);
     }
 }

@@ -1,52 +1,143 @@
 <?php
 require_once 'php/config.php';
 
+// Cache para recursos estáticos del HTML (no para el API)
 if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
     header('HTTP/1.1 304 Not Modified');
     exit;
 }
 
-header('Cache-Control: public, max-age=86400');
+header('Cache-Control: public, max-age=3600');
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Pintumex - Punto de Venta</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
     <meta name="csrf-token" content="<?php echo generarCsrfToken(); ?>">
-    
+    <meta name="theme-color" content="#2E2168">
+
+    <!-- Compatibilidad: polyfill para IntersectionObserver y requestIdleCallback en Edge -->
+    <script>
+        if (!('IntersectionObserver' in window)) {
+            document.write('<script src="https://polyfill.io/v3/polyfill.min.js?features=IntersectionObserver"><\/script>');
+        }
+        if (!('requestIdleCallback' in window)) {
+            window.requestIdleCallback = function(cb) { return setTimeout(cb, 1); };
+            window.cancelIdleCallback  = clearTimeout;
+        }
+        if (!('Promise' in window)) {
+            document.write('<script src="https://polyfill.io/v3/polyfill.min.js?features=Promise,fetch"><\/script>');
+        }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="dns-prefetch" href="https://fonts.gstatic.com">
-    
+
     <style>
-        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh}.sistema-pos{display:grid;grid-template-columns:250px 1fr 350px;height:100vh;overflow:hidden}.sidebar{background:#2E2168;color:#fff;height:100vh;overflow-y:auto}.logo{text-align:center;padding:1.5rem 1rem;border-bottom:1px solid rgba(255,255,255,0.1)}.logo h1{color:#3e9e45;text-shadow:0 1px 2px rgba(0,0,0,0.2)}.carrito-panel{background:#fff;border-left:2px solid rgba(0,0,0,0.05);height:100vh;display:flex;flex-direction:column;overflow:hidden}.loading-spinner{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:50px;height:50px;border:5px solid #f3f3f3;border-top-color:#2b7c30;border-radius:50%;animation:spin 1s linear infinite;z-index:9999}.hidden{display:none}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:992px){.sistema-pos{grid-template-columns:1fr}.sidebar{display:none}.carrito-panel{position:fixed;right:0;top:0;width:min(350px,90%);transform:translateX(100%);z-index:1000}.carrito-panel.visible{transform:translateX(0)}}
-    </style>
-    
-    <link rel="preload" href="css/fontawesome/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="css/fontawesome/css/all.min.css"></noscript>
-    
-    <link rel="preload" href="css/estilo.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="css/estilo.css"></noscript>
-    
-    <link rel="preload" href="css/modulo-caja.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="css/modulo-caja.css"></noscript>
-    
-    <link rel="preload" href="css/modulo-productos.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="css/modulo-productos.css"></noscript>
-    
-    <style>
-        .escanner-input { position: relative; }
-        #codigoBarras {
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-            padding-right: 40px;
+        /* Reset y base */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Variables CSS con fallbacks para compatibilidad */
+        :root {
+            --primary: #2E2168;
+            --primary-light: #3d2d8a;
+            --secondary: #e67e22;
+            --secondary-dark: #d35400;
+            --success: #27AE60;
+            --danger: #E74C3C;
+            --gray: #64748b;
+            --light: #e2e8f0;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,.1);
+            --shadow-md: 0 4px 6px rgba(0,0,0,.1);
+            --shadow-lg: 0 10px 15px rgba(0,0,0,.1);
+            --radius-md: 8px;
+            --radius-lg: 12px;
         }
-        #codigoBarras:focus {
-            border-color: #e67e22;
-            box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.4);
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
+
+        .sistema-pos {
+            display: -ms-grid;
+            display: grid;
+            -ms-grid-columns: 250px 1fr 350px;
+            grid-template-columns: 250px 1fr 350px;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Soporte para IE/Edge sin CSS Grid nativo */
+        @supports not (display: grid) {
+            .sistema-pos { display: flex; }
+            .sidebar { width: 250px; flex-shrink: 0; }
+            .contenido-principal { flex: 1; }
+            .carrito-panel { width: 350px; flex-shrink: 0; }
+        }
+
+        .sidebar {
+            background: #2E2168;
+            color: #fff;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-y: overlay;
+        }
+
+        .logo {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo h1 {
+            color: #3e9e45;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .carrito-panel {
+            background: #fff;
+            border-left: 2px solid rgba(0,0,0,0.05);
+            height: 100vh;
+            display: -webkit-box;
+            display: -ms-flexbox;
+            display: flex;
+            -webkit-box-orient: vertical;
+            -webkit-box-direction: normal;
+            -ms-flex-direction: column;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .loading-spinner {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            -webkit-transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top-color: #2b7c30;
+            border-radius: 50%;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+            z-index: 9999;
+        }
+
+        .hidden { display: none; }
+
+        @-webkit-keyframes spin { to { -webkit-transform: translate(-50%,-50%) rotate(360deg); transform: translate(-50%,-50%) rotate(360deg); } }
+        @keyframes spin        { to { transform: translate(-50%,-50%) rotate(360deg); } }
+
+        /* Accesibilidad */
         .visually-hidden {
             position: absolute;
             width: 1px;
@@ -54,9 +145,11 @@ header('Cache-Control: public, max-age=86400');
             margin: -1px;
             padding: 0;
             overflow: hidden;
-            clip: rect(0, 0, 0, 0);
+            clip: rect(0,0,0,0);
             border: 0;
+            white-space: nowrap;
         }
+
         .skip-link {
             position: absolute;
             top: -40px;
@@ -66,28 +159,111 @@ header('Cache-Control: public, max-age=86400');
             padding: 8px;
             z-index: 100;
             text-decoration: none;
+            border-radius: 0 0 4px 0;
         }
-        .skip-link:focus {
-            top: 0;
-        }
+
+        .skip-link:focus { top: 0; }
+
         :focus-visible {
             outline: 3px solid #2b7c30;
             outline-offset: 2px;
             border-radius: 4px;
         }
+
+        /* Reducir animaciones si el usuario lo prefiere */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                -webkit-animation-duration: .01ms !important;
+                animation-duration: .01ms !important;
+                -webkit-transition-duration: .01ms !important;
+                transition-duration: .01ms !important;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .sistema-pos {
+                -ms-grid-columns: 1fr;
+                grid-template-columns: 1fr;
+            }
+            .sidebar { display: none; }
+            .carrito-panel {
+                position: fixed;
+                right: 0;
+                top: 0;
+                width: min(350px, 90vw);
+                -webkit-transform: translateX(100%);
+                transform: translateX(100%);
+                z-index: 1000;
+                -webkit-transition: -webkit-transform 0.3s ease;
+                transition: transform 0.3s ease;
+            }
+            .carrito-panel.visible {
+                -webkit-transform: translateX(0);
+                transform: translateX(0);
+            }
+        }
+
+        /* Buscador */
+        .escanner-input { position: relative; }
+
+        #codigoBarras {
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            padding-right: 40px;
+        }
+
+        #codigoBarras:focus {
+            border-color: #e67e22;
+            -webkit-box-shadow: 0 0 0 4px rgba(230,126,34,0.4);
+            box-shadow: 0 0 0 4px rgba(230,126,34,0.4);
+        }
+
+        /* Banner offline */
+        #offlineBanner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #E74C3C;
+            color: white;
+            text-align: center;
+            padding: 8px;
+            z-index: 10000;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
     </style>
+
+    <link rel="preload" href="css/fontawesome/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/fontawesome/css/all.min.css"></noscript>
+
+    <link rel="preload" href="css/estilo.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/estilo.css"></noscript>
+
+    <link rel="preload" href="css/modulo-caja.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/modulo-caja.css"></noscript>
+
+    <link rel="preload" href="css/modulo-productos.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/modulo-productos.css"></noscript>
 </head>
 <body>
+    <!-- Banner de disponibilidad offline -->
+    <div id="offlineBanner" role="alert" aria-live="assertive">
+        <i class="fas fa-wifi"></i> Sin conexión — Algunas funciones no están disponibles
+    </div>
+
     <a href="#contenido-principal" class="skip-link">Saltar al contenido principal</a>
-    <div id="loadingSpinner" class="loading-spinner"></div>
-    
+    <div id="loadingSpinner" class="loading-spinner" role="status" aria-label="Cargando sistema"></div>
+
     <div class="sistema-pos" id="sistemaPos" style="display: none;">
         <aside class="sidebar">
             <div class="logo">
                 <h1>Pintumex</h1>
                 <p>Punto de Venta</p>
             </div>
-            
+
             <nav aria-label="Menú principal">
                 <ul class="menu">
                     <li class="menu-item active" data-modulo="caja" role="button" tabindex="0" aria-label="Módulo de caja">
@@ -113,40 +289,39 @@ header('Cache-Control: public, max-age=86400');
                 </ul>
             </nav>
         </aside>
-        
+
         <main class="contenido-principal" id="contenido-principal">
-            <!-- Sección de punto de venta (solo visible cuando el módulo está activo) -->
             <section class="escanner-section" id="seccionPuntoVenta" style="display: block;">
                 <h2 id="escanner-titulo" class="visually-hidden">Buscador de productos</h2>
                 <div class="buscador-container">
                     <div class="escanner-input">
                         <label for="codigoBarras" class="visually-hidden">Buscar por código o nombre</label>
-                        <input type="text" 
-                               id="codigoBarras" 
-                               placeholder="Buscar por código, nombre..." 
-                               autofocus 
+                        <input type="text"
+                               id="codigoBarras"
+                               placeholder="Buscar por código, nombre..."
+                               autofocus
                                autocomplete="off"
                                spellcheck="false"
                                aria-label="Campo de búsqueda de productos">
-                        <button class="btn-escanner" style="display: none;" id="btnEscannerOculto" aria-hidden="true">
+                        <button class="btn-escanner" style="display: none;" id="btnEscannerOculto" aria-hidden="true" tabindex="-1">
                             <i class="fas fa-barcode" aria-hidden="true"></i>
                             Buscar
                         </button>
                     </div>
                     <div id="sugerencias" class="sugerencias-lista" role="listbox" aria-label="Sugerencias de productos"></div>
                 </div>
-                
+
                 <nav aria-label="Filtros por categoría">
                     <h3 class="visually-hidden">Categorías de productos</h3>
                     <div class="filtros-categoria" id="filtrosCategoria">
-                        <button class="filtro-btn active" data-categoria="Todas" aria-label="Filtrar por categoría Todas">Todas</button>
+                        <button class="filtro-btn active" data-categoria="Todas" aria-label="Filtrar por categoría Todas" aria-pressed="true">Todas</button>
                     </div>
                 </nav>
-                
-                <div class="productos-grid" id="productosGrid" aria-label="Lista de productos disponibles"></div>
+
+                <div class="productos-grid" id="productosGrid" role="list" aria-label="Lista de productos disponibles"></div>
             </section>
         </main>
-        
+
         <aside class="carrito-panel" aria-labelledby="carrito-titulo">
             <div class="carrito-header">
                 <h2 id="carrito-titulo">
@@ -154,26 +329,26 @@ header('Cache-Control: public, max-age=86400');
                     Carrito de Venta
                 </h2>
             </div>
-            
+
             <div class="carrito-items-container">
                 <div class="carrito-items" id="carritoItems" aria-label="Productos en el carrito" aria-live="polite"></div>
             </div>
-            
+
             <div class="carrito-totales" aria-label="Resumen de la compra">
                 <div class="total-row">
                     <span>Subtotal:</span>
                     <span id="subtotal" aria-live="polite">$0.00</span>
                 </div>
-                
+
                 <div id="efectivoSection" style="display: none;">
                     <div class="total-row">
                         <label for="efectivoRecibido">Efectivo recibido:</label>
                         <span>
-                            <input type="number" 
-                                   id="efectivoRecibido" 
-                                   min="0" 
-                                   step="0.01" 
-                                   placeholder="0.00" 
+                            <input type="number"
+                                   id="efectivoRecibido"
+                                   min="0"
+                                   step="0.01"
+                                   placeholder="0.00"
                                    aria-label="Cantidad de efectivo recibido"
                                    style="width: 100px; padding: 0.2rem; border: 1px solid #d1d5db; border-radius: 4px; text-align: right;">
                         </span>
@@ -183,13 +358,13 @@ header('Cache-Control: public, max-age=86400');
                         <span id="cambio" aria-live="polite">$0.00</span>
                     </div>
                 </div>
-                
+
                 <div class="total-row grande">
                     <span>Total:</span>
                     <span id="total" aria-live="polite">$0.00</span>
                 </div>
             </div>
-            
+
             <div class="metodos-pago-container">
                 <h3 class="visually-hidden">Métodos de pago</h3>
                 <div class="metodos-pago" role="radiogroup" aria-label="Seleccione método de pago">
@@ -207,7 +382,7 @@ header('Cache-Control: public, max-age=86400');
                     </button>
                 </div>
             </div>
-            
+
             <div class="btn-procesar-container">
                 <button class="btn-procesar" id="btnProcesar" disabled aria-disabled="true" aria-label="Procesar venta">
                     <i class="fas fa-check-circle" aria-hidden="true"></i>
@@ -215,21 +390,21 @@ header('Cache-Control: public, max-age=86400');
                 </button>
             </div>
         </aside>
-        
+
         <div class="usuario-info" aria-label="Información de usuario">
             <div class="online-indicator">
                 <span class="online-dot" aria-hidden="true"></span>
-                <span>En línea</span>
+                <span id="onlineStatus">En línea</span>
             </div>
             <i class="fas fa-user-circle" aria-hidden="true"></i>
             <span>Administrador</span>
         </div>
-        
+
         <div class="modal" id="modalTicket" role="dialog" aria-labelledby="ticket-titulo" aria-modal="true">
             <div class="modal-contenido">
                 <h3 id="ticket-titulo" class="visually-hidden">Ticket de venta</h3>
                 <div id="ticketContenido"></div>
-                <button onclick="document.getElementById('modalTicket').style.display='none'" 
+                <button onclick="document.getElementById('modalTicket').style.display='none'"
                         style="margin-top: 1rem; padding: 0.5rem; width: 100%; background: #2E2168; color: white; border: none; border-radius: 4px; cursor: pointer;"
                         aria-label="Cerrar ticket">
                     Cerrar
@@ -237,25 +412,49 @@ header('Cache-Control: public, max-age=86400');
             </div>
         </div>
     </div>
-    
+
     <script>
-        window.addEventListener('load', function() {
+        // Inicialización del sistema
+        window.addEventListener('load', function () {
             document.getElementById('loadingSpinner').style.display = 'none';
             document.getElementById('sistemaPos').style.display = 'grid';
         });
-        
+
+        // Detección offline/online — Requerimiento de disponibilidad
+        function actualizarEstadoRed() {
+            const banner = document.getElementById('offlineBanner');
+            const statusEl = document.getElementById('onlineStatus');
+            const dot = document.querySelector('.online-dot');
+
+            if (!navigator.onLine) {
+                if (banner) banner.style.display = 'block';
+                if (statusEl) statusEl.textContent = 'Sin conexión';
+                if (dot) dot.style.background = '#E74C3C';
+            } else {
+                if (banner) banner.style.display = 'none';
+                if (statusEl) statusEl.textContent = 'En línea';
+                if (dot) dot.style.background = '#27AE60';
+            }
+        }
+
+        window.addEventListener('online',  actualizarEstadoRed);
+        window.addEventListener('offline', actualizarEstadoRed);
+        actualizarEstadoRed();
+
+        // Agregar categorías al filtro
         const categorias = ['Acrílicas', 'Esmaltes', 'Selladores', 'Barniz', 'Aerosol', 'Impermeabilizante', 'Complementos'];
         const filtrosContainer = document.getElementById('filtrosCategoria');
-        categorias.forEach(cat => {
+        categorias.forEach(function (cat) {
             const btn = document.createElement('button');
             btn.className = 'filtro-btn';
             btn.textContent = cat;
             btn.setAttribute('data-categoria', cat);
-            btn.setAttribute('aria-label', `Filtrar por categoría ${cat}`);
+            btn.setAttribute('aria-label', 'Filtrar por categoría ' + cat);
+            btn.setAttribute('aria-pressed', 'false');
             filtrosContainer.appendChild(btn);
         });
     </script>
-    
+
     <script src="js/ticket-printer.js" defer></script>
     <script src="js/script.js" defer></script>
     <script src="js/modulo-caja.js" defer></script>
