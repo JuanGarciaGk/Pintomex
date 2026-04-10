@@ -58,14 +58,14 @@ CREATE TABLE IF NOT EXISTS ventas (
 CREATE TABLE IF NOT EXISTS detalles_venta (
     id               INT AUTO_INCREMENT PRIMARY KEY,
     venta_id         INT           NOT NULL,
-    producto_id      INT           NOT NULL,
+    producto_id      INT           NULL,
     cantidad         INT           NOT NULL,
     precio_unitario  DECIMAL(10,2) NOT NULL,
     subtotal         DECIMAL(10,2) NOT NULL,
     CONSTRAINT fk_detalles_venta
         FOREIGN KEY (venta_id)    REFERENCES ventas(id)    ON DELETE CASCADE,
     CONSTRAINT fk_detalles_producto
-        FOREIGN KEY (producto_id) REFERENCES productos(id)
+        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS movimientos_inventario (
@@ -179,6 +179,43 @@ DELIMITER ;
 
 CALL crear_indices();
 DROP PROCEDURE IF EXISTS crear_indices;
+
+-- Migración: ajustar FK existente si ya existe la tabla
+DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
+
+DELIMITER $$
+
+CREATE PROCEDURE migrar_fk_detalles_producto()
+BEGIN
+    -- Permitir NULL en producto_id si la columna aún es NOT NULL
+    IF EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE table_schema = DATABASE()
+          AND table_name   = 'detalles_venta'
+          AND column_name  = 'producto_id'
+          AND is_nullable  = 'NO'
+    ) THEN
+        ALTER TABLE detalles_venta MODIFY COLUMN producto_id INT NULL;
+    END IF;
+
+    -- Reemplazar la FK solo si existe sin ON DELETE SET NULL
+    IF EXISTS (
+        SELECT 1 FROM information_schema.REFERENTIAL_CONSTRAINTS
+        WHERE constraint_schema = DATABASE()
+          AND constraint_name   = 'fk_detalles_producto'
+          AND delete_rule       != 'SET NULL'
+    ) THEN
+        ALTER TABLE detalles_venta
+            DROP FOREIGN KEY fk_detalles_producto,
+            ADD CONSTRAINT fk_detalles_producto
+                FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL;
+    END IF;
+END$$
+
+DELIMITER ;
+
+CALL migrar_fk_detalles_producto();
+DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
 
 INSERT INTO productos
     (codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual)

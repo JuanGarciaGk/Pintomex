@@ -240,61 +240,50 @@ class ProductosAdmin {
     
     public function eliminar($id) {
         global $conn;
-        
+
         try {
             $id = filter_var($id, FILTER_VALIDATE_INT);
             if (!$id || $id <= 0) {
                 return ['success' => false, 'message' => 'ID inválido'];
             }
-            
-            $stmt = $conn->prepare("SELECT nombre, (SELECT COUNT(*) FROM detalles_venta WHERE producto_id = ?) as ventas_asociadas FROM productos WHERE id = ?");
-            $stmt->bind_param("ii", $id, $id);
+
+            $stmt = $conn->prepare("SELECT nombre FROM productos WHERE id = ?");
+            $stmt->bind_param("i", $id);
             $stmt->execute();
             $result = $stmt->get_result();
-            
+
             if ($result->num_rows === 0) {
                 $stmt->close();
                 return ['success' => false, 'message' => 'Producto no encontrado'];
             }
-            
+
             $producto = $result->fetch_assoc();
-            $stmt->close();
-            
-            $ventas_asociadas = $producto['ventas_asociadas'];
             $nombre_producto = $producto['nombre'];
-            
+            $stmt->close();
+
             $conn->begin_transaction();
-            
-            if ($ventas_asociadas > 0) {
-                $stmt = $conn->prepare("DELETE FROM detalles_venta WHERE producto_id = ?");
-                $stmt->bind_param("i", $id);
-                $stmt->execute();
-                $stmt->close();
-            }
-            
+
+            // Solo eliminar movimientos de inventario (no tocar detalles_venta)
             $stmt = $conn->prepare("DELETE FROM movimientos_inventario WHERE producto_id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $stmt->close();
-            
+
+            // Al eliminar el producto, la FK ON DELETE SET NULL pondrá producto_id = NULL
+            // en detalles_venta automáticamente, preservando el historial de ventas.
             $stmt = $conn->prepare("DELETE FROM productos WHERE id = ?");
             $stmt->bind_param("i", $id);
-            
+
             if ($stmt->execute()) {
                 $stmt->close();
                 $conn->commit();
-                
-                if ($ventas_asociadas > 0) {
-                    return ['success' => true, 'message' => "Producto \"{$nombre_producto}\" eliminado exitosamente junto con sus {$ventas_asociadas} venta(s) asociada(s)"];
-                } else {
-                    return ['success' => true, 'message' => "Producto \"{$nombre_producto}\" eliminado exitosamente"];
-                }
+                return ['success' => true, 'message' => "Producto \"{$nombre_producto}\" eliminado exitosamente"];
             } else {
                 $conn->rollback();
                 $stmt->close();
                 return ['success' => false, 'message' => 'Error al eliminar producto'];
             }
-            
+
         } catch (Exception $e) {
             $conn->rollback();
             error_log("Error en eliminar: " . $e->getMessage());

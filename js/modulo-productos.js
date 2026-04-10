@@ -172,8 +172,6 @@ _mostrarCarrito() {
             const stockClass   = p.stock_actual <= 0
                 ? 'stock-critico'
                 : p.stock_actual <= p.stock_minimo ? 'stock-bajo' : 'stock-normal';
-            const puedeEliminar = !(p.ventas_asociadas && p.ventas_asociadas > 0);
-
             html += `
                 <tr data-id="${p.id}">
                     <td style="vertical-align:middle;">
@@ -201,8 +199,7 @@ _mostrarCarrito() {
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="btn-eliminar" data-id="${p.id}" title="Eliminar"
-                            ${!puedeEliminar ? 'disabled' : ''}
-                            style="background:var(--danger);color:white;border:none;width:32px;height:32px;border-radius:8px;cursor:${!puedeEliminar ? 'not-allowed' : 'pointer'};opacity:${!puedeEliminar ? '.5' : '1'};transition:all .2s;">
+                            style="background:var(--danger);color:white;border:none;width:32px;height:32px;border-radius:8px;cursor:pointer;transition:all .2s;">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -218,7 +215,7 @@ _mostrarCarrito() {
             btn.addEventListener('mouseleave', e => e.currentTarget.style.transform = 'scale(1)');
         });
 
-        container.querySelectorAll('.btn-eliminar:not([disabled])').forEach(btn => {
+        container.querySelectorAll('.btn-eliminar').forEach(btn => {
             btn.addEventListener('click', e => { e.stopPropagation(); this.confirmarEliminar(parseInt(btn.dataset.id)); });
             btn.addEventListener('mouseenter', e => e.currentTarget.style.transform = 'scale(1.1)');
             btn.addEventListener('mouseleave', e => e.currentTarget.style.transform = 'scale(1)');
@@ -380,14 +377,6 @@ _mostrarCarrito() {
     async confirmarEliminar(id) {
         const producto = this.productos.find(p => p.id === id);
         if (!producto) return;
-
-        if (producto.ventas_asociadas && producto.ventas_asociadas > 0) {
-            this.mostrarNotificacion(
-                `No se puede eliminar "${producto.nombre}" porque tiene ${producto.ventas_asociadas} venta(s) asociada(s)`,
-                'error'
-            );
-            return;
-        }
 
         if (!confirm(`¿Está seguro de eliminar el producto "${producto.nombre}"?\nEsta acción no se puede deshacer.`)) return;
 
