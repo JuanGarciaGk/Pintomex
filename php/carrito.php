@@ -224,7 +224,6 @@ class Carrito {
             }
             $stmt->close();
 
-            // Insertar venta con estado 'activa'
             $stmt     = $conn->prepare("INSERT INTO ventas (folio, subtotal, total, metodo_pago, efectivo_recibido, cambio, estado) VALUES (?, ?, ?, ?, ?, ?, 'activa')");
             $subtotal = floatval($carrito['subtotal']);
             $total    = floatval($carrito['total']);
@@ -284,7 +283,6 @@ class Carrito {
         }
     }
 
-    // ─── Cancelar venta y restaurar stock ────────────────────────────────────
     public function cancelarVenta($folio, $motivo) {
         global $conn;
 
@@ -361,6 +359,61 @@ class Carrito {
             $stmt->execute();
             $stmt->close();
 
+            if (!empty($venta['corte_caja_id'])) {
+                $corte_id = intval($venta['corte_caja_id']);
+
+                $stmt = $conn->prepare(
+                    "SELECT monto_inicial, monto_final FROM cortes_caja WHERE id = ? AND estado = 'cerrada'"
+                );
+                $stmt->bind_param("i", $corte_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $corte  = $result->fetch_assoc();
+                $stmt->close();
+
+                if ($corte) {
+                    $stmt = $conn->prepare(
+                        "SELECT
+                             COALESCE(SUM(CASE WHEN metodo_pago = 'Efectivo' THEN total ELSE 0 END), 0) AS total_efectivo
+                         FROM ventas
+                         WHERE corte_caja_id = ?
+                           AND estado = 'activa'"
+                    );
+                    $stmt->bind_param("i", $corte_id);
+                    $stmt->execute();
+                    $result          = $stmt->get_result();
+                    $row             = $result->fetch_assoc();
+                    $nuevo_total_ef  = floatval($row['total_efectivo']);
+                    $stmt->close();
+
+                    $stmt = $conn->prepare(
+                        "SELECT COALESCE(SUM(monto), 0) AS total_gastos
+                         FROM movimientos_caja
+                         WHERE corte_caja_id = ? AND tipo = 'egreso'"
+                    );
+                    $stmt->bind_param("i", $corte_id);
+                    $stmt->execute();
+                    $result       = $stmt->get_result();
+                    $row          = $result->fetch_assoc();
+                    $total_gastos = floatval($row['total_gastos']);
+                    $stmt->close();
+                    $monto_inicial  = floatval($corte['monto_inicial']);
+                    $monto_final    = floatval($corte['monto_final']);
+                    $nuevo_esperado = $monto_inicial + $nuevo_total_ef - $total_gastos;
+                    $nueva_dif      = $monto_final - $nuevo_esperado;
+
+                    $stmt = $conn->prepare(
+                        "UPDATE cortes_caja
+                         SET total_ventas = ?,
+                             diferencia   = ?
+                         WHERE id = ?"
+                    );
+                    $stmt->bind_param("ddi", $nuevo_total_ef, $nueva_dif, $corte_id);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+
             $conn->commit();
 
             return [
@@ -377,16 +430,6 @@ class Carrito {
         }
     }
 
-    // ─── Buscar venta por folio (búsqueda parcial) ───────────────────────────
-    /**
-     * Permite buscar por:
-     *  - Folio exacto:           VENTA-20260409-71827
-     *  - Últimos N dígitos:      71827
-     *  - Fecha parcial:          20260409
-     *  - Cualquier fragmento:    409-718
-     *
-     * Devuelve hasta 10 coincidencias ordenadas por fecha DESC.
-     */
     public function buscarVentaPorFolio($termino) {
         global $conn;
 

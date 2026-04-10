@@ -1,7 +1,6 @@
 <?php
 require_once 'php/config.php';
 
-// Cache para recursos estáticos del HTML (no para el API)
 if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
     header('HTTP/1.1 304 Not Modified');
     exit;
@@ -15,12 +14,12 @@ header('Cache-Control: public, max-age=3600');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Pintumex - Punto de Venta</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
+    <title>Pintumex</title>
+    <link rel="icon" href="img/pintumex-icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="img/pintumex-icon.png">    
     <meta name="csrf-token" content="<?php echo generarCsrfToken(); ?>">
     <meta name="theme-color" content="#2E2168">
 
-    <!-- Compatibilidad: polyfill para IntersectionObserver y requestIdleCallback en Edge -->
     <script>
         if (!('IntersectionObserver' in window)) {
             document.write('<script src="https://polyfill.io/v3/polyfill.min.js?features=IntersectionObserver"><\/script>');
@@ -38,10 +37,8 @@ header('Cache-Control: public, max-age=3600');
     <link rel="dns-prefetch" href="https://fonts.gstatic.com">
 
     <style>
-        /* Reset y base */
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-        /* Variables CSS con fallbacks para compatibilidad */
         :root {
             --primary: #2E2168;
             --primary-light: #3d2d8a;
@@ -75,7 +72,6 @@ header('Cache-Control: public, max-age=3600');
             overflow: hidden;
         }
 
-        /* Soporte para IE/Edge sin CSS Grid nativo */
         @supports not (display: grid) {
             .sistema-pos { display: flex; }
             .sidebar { width: 250px; flex-shrink: 0; }
@@ -93,13 +89,23 @@ header('Cache-Control: public, max-age=3600');
 
         .logo {
             text-align: center;
-            padding: 1.5rem 1rem;
+            padding: 1rem;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
 
-        .logo h1 {
-            color: #3e9e45;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        .logo img {
+            max-width: 180px;
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto 0.3rem;
+            mix-blend-mode: screen;
+        }
+
+        .logo p {
+            color: rgba(255,255,255,0.85);
+            font-size: 0.85rem;
+            margin-top: 0.2rem;
         }
 
         .carrito-panel {
@@ -137,7 +143,6 @@ header('Cache-Control: public, max-age=3600');
         @-webkit-keyframes spin { to { -webkit-transform: translate(-50%,-50%) rotate(360deg); transform: translate(-50%,-50%) rotate(360deg); } }
         @keyframes spin        { to { transform: translate(-50%,-50%) rotate(360deg); } }
 
-        /* Accesibilidad */
         .visually-hidden {
             position: absolute;
             width: 1px;
@@ -170,7 +175,6 @@ header('Cache-Control: public, max-age=3600');
             border-radius: 4px;
         }
 
-        /* Reducir animaciones si el usuario lo prefiere */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 -webkit-animation-duration: .01ms !important;
@@ -180,7 +184,6 @@ header('Cache-Control: public, max-age=3600');
             }
         }
 
-        /* Responsive */
         @media (max-width: 992px) {
             .sistema-pos {
                 -ms-grid-columns: 1fr;
@@ -204,7 +207,6 @@ header('Cache-Control: public, max-age=3600');
             }
         }
 
-        /* Buscador */
         .escanner-input { position: relative; }
 
         #codigoBarras {
@@ -219,7 +221,6 @@ header('Cache-Control: public, max-age=3600');
             box-shadow: 0 0 0 4px rgba(230,126,34,0.4);
         }
 
-        /* Banner offline */
         #offlineBanner {
             display: none;
             position: fixed;
@@ -249,7 +250,6 @@ header('Cache-Control: public, max-age=3600');
     <noscript><link rel="stylesheet" href="css/modulo-productos.css"></noscript>
 </head>
 <body>
-    <!-- Banner de disponibilidad offline -->
     <div id="offlineBanner" role="alert" aria-live="assertive">
         <i class="fas fa-wifi"></i> Sin conexión — Algunas funciones no están disponibles
     </div>
@@ -260,8 +260,7 @@ header('Cache-Control: public, max-age=3600');
     <div class="sistema-pos" id="sistemaPos" style="display: none;">
         <aside class="sidebar">
             <div class="logo">
-                <h1>Pintumex</h1>
-                <p>Punto de Venta</p>
+                <img src="img/pintumex-logo.png" alt="Pintumex logo">
             </div>
 
             <nav aria-label="Menú principal">
@@ -414,26 +413,24 @@ header('Cache-Control: public, max-age=3600');
     </div>
 
     <script>
-        // Inicialización del sistema
         window.addEventListener('load', function () {
             document.getElementById('loadingSpinner').style.display = 'none';
             document.getElementById('sistemaPos').style.display = 'grid';
         });
 
-        // Detección offline/online — Requerimiento de disponibilidad
         function actualizarEstadoRed() {
-            const banner = document.getElementById('offlineBanner');
+            const banner   = document.getElementById('offlineBanner');
             const statusEl = document.getElementById('onlineStatus');
-            const dot = document.querySelector('.online-dot');
+            const dot      = document.querySelector('.online-dot');
 
             if (!navigator.onLine) {
-                if (banner) banner.style.display = 'block';
-                if (statusEl) statusEl.textContent = 'Sin conexión';
-                if (dot) dot.style.background = '#E74C3C';
+                if (banner)   banner.style.display   = 'block';
+                if (statusEl) statusEl.textContent    = 'Sin conexión';
+                if (dot)      dot.style.background    = '#E74C3C';
             } else {
-                if (banner) banner.style.display = 'none';
-                if (statusEl) statusEl.textContent = 'En línea';
-                if (dot) dot.style.background = '#27AE60';
+                if (banner)   banner.style.display   = 'none';
+                if (statusEl) statusEl.textContent    = 'En línea';
+                if (dot)      dot.style.background    = '#27AE60';
             }
         }
 
@@ -441,9 +438,8 @@ header('Cache-Control: public, max-age=3600');
         window.addEventListener('offline', actualizarEstadoRed);
         actualizarEstadoRed();
 
-        // Agregar categorías al filtro
-        const categorias = ['Acrílicas', 'Esmaltes', 'Selladores', 'Barniz', 'Aerosol', 'Impermeabilizante', 'Complementos'];
-        const filtrosContainer = document.getElementById('filtrosCategoria');
+        const categorias        = ['Acrílicas', 'Esmaltes', 'Selladores', 'Barniz', 'Aerosol', 'Impermeabilizante', 'Complementos'];
+        const filtrosContainer  = document.getElementById('filtrosCategoria');
         categorias.forEach(function (cat) {
             const btn = document.createElement('button');
             btn.className = 'filtro-btn';

@@ -53,7 +53,6 @@ body {
     transition: grid-template-columns 0.3s ease;
 }
 
-/* Colapsa la columna del carrito cuando está oculto */
 .sistema-pos.carrito-oculto {
     grid-template-columns: 250px 1fr 0;
 }
@@ -70,22 +69,24 @@ body {
 
 .logo {
     text-align: center;
-    padding: 1.5rem 1rem;
+    padding: 1rem;
     border-bottom: 1px solid rgba(255,255,255,0.1);
     animation: fadeInDown 0.5s ease;
 }
 
-.logo h1 {
-    font-size: clamp(1.2rem, 4vw, 1.5rem);
-    margin-bottom: 0.25rem;
-    color: #3e9e45;
-    font-weight: 700;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+.logo img {
+    max-width: 180px;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 0.3rem;
+    mix-blend-mode: screen;
 }
 
 .logo p {
+    color: rgba(255,255,255,0.85);
     font-size: clamp(0.8rem, 3vw, 0.9rem);
-    opacity: 0.9;
+    margin-top: 0.2rem;
 }
 
 .menu {
@@ -882,75 +883,44 @@ input.error {
 
 @keyframes fadeIn {
     from { opacity: 0; }
-    to { opacity: 1; }
+    to   { opacity: 1; }
 }
 
 @keyframes fadeInDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideInRight {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
 }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes scaleIn {
-    from {
-        opacity: 0;
-        transform: scale(0.9);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+    from { opacity: 0; transform: scale(0.9); }
+    to   { opacity: 1; transform: scale(1); }
 }
 
 @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-    20%, 40%, 60%, 80% { transform: translateX(5px); }
+    0%, 100%                         { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90%          { transform: translateX(-5px); }
+    20%, 40%, 60%, 80%               { transform: translateX(5px); }
 }
 
 @keyframes fadeOut {
-    from {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateX(100%);
-        opacity: 0;
-    }
+    from { transform: translateX(0);    opacity: 1; }
+    to   { transform: translateX(100%); opacity: 0; }
 }
 
 @media (max-width: 1200px) {
     .sistema-pos {
         grid-template-columns: 220px 1fr 300px;
     }
-
     .sistema-pos.carrito-oculto {
         grid-template-columns: 220px 1fr 0;
     }
@@ -960,12 +930,9 @@ input.error {
     .sistema-pos {
         grid-template-columns: 1fr;
     }
-
-    /* En móvil el carrito es overlay, no columna de grid */
     .sistema-pos.carrito-oculto {
         grid-template-columns: 1fr;
     }
-
     .sidebar {
         display: none;
         position: fixed;
@@ -974,17 +941,14 @@ input.error {
         width: 280px;
         z-index: 1000;
     }
-
     .sidebar.mobile-visible {
         display: block;
         animation: slideInRight 0.3s ease;
     }
-
     .contenido-principal {
         height: 100vh;
         padding-bottom: 100px;
     }
-
     .carrito-panel {
         position: fixed;
         right: 0;
@@ -993,23 +957,18 @@ input.error {
         width: min(350px, 90%);
         transform: translateX(100%);
         z-index: 1000;
-        /* En móvil siempre mostramos el panel como overlay */
         display: flex !important;
     }
-
     .carrito-panel.visible {
         transform: translateX(0);
     }
-
     .toggle-carrito-mobile,
     .toggle-menu-mobile {
         display: flex;
     }
-
     .productos-grid {
         max-height: calc(100vh - 280px);
     }
-
     .usuario-info {
         bottom: 1rem;
         left: 1rem;
@@ -1020,29 +979,23 @@ input.error {
     .escanner-input {
         flex-direction: column;
     }
-
     .escanner-input input {
         width: 100%;
     }
-
     .filtros-categoria {
         justify-content: center;
     }
-
     .filtro-btn {
         flex: 1 1 calc(50% - 0.5rem);
         max-width: none;
         text-align: center;
     }
-
     .productos-grid {
         grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     }
-
     .modal-contenido {
         padding: 1.5rem;
     }
-
     .ticket-header h2 {
         font-size: 1.5rem;
     }
@@ -1052,52 +1005,41 @@ input.error {
     html {
         font-size: 14px;
     }
-
     .contenido-principal {
         padding: 0.8rem;
     }
-
     .filtros-categoria {
         gap: 0.3rem;
     }
-
     .filtro-btn {
         flex: 1 1 calc(50% - 0.3rem);
         padding: 0.5rem 0.8rem;
         font-size: 0.85rem;
     }
-
     .productos-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         gap: 0.5rem;
     }
-
     .producto-card {
         padding: 0.6rem;
     }
-
     .producto-card h3 {
         font-size: 0.85rem;
     }
-
     .producto-card .precio {
         font-size: 1rem;
     }
-
     .carrito-panel {
         width: 100%;
     }
-
     .carrito-item {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.8rem;
     }
-
     .item-info {
         width: 100%;
     }
-
     .item-precio {
         width: 100%;
         text-align: left;
@@ -1106,40 +1048,33 @@ input.error {
         align-items: center;
         margin-left: 0;
     }
-
     .cantidad-control {
         width: 100%;
         justify-content: space-between;
     }
-
     .metodos-pago {
         grid-template-columns: repeat(3, 1fr);
     }
-
     .metodo-pago-btn {
         min-height: 60px;
         font-size: 0.8rem;
     }
-
     .toggle-carrito-mobile {
         bottom: 70px;
         right: 0.8rem;
         padding: 0.6rem 1rem;
     }
-
     .toggle-menu-mobile {
         top: 0.8rem;
         left: 0.8rem;
         padding: 0.6rem 1rem;
     }
-
     .usuario-info {
         bottom: 0.8rem;
         left: 0.8rem;
         padding: 0.4rem 0.8rem;
         font-size: 0.8rem;
     }
-
     .scanner-feedback {
         font-size: 1rem;
         padding: 0.8rem 1.5rem;
@@ -1151,16 +1086,13 @@ input.error {
     .sidebar {
         width: 240px;
     }
-
     .productos-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         max-height: calc(100vh - 250px);
     }
-
     .carrito-panel {
         width: 300px;
     }
-
     .metodo-pago-btn {
         min-height: 50px;
         padding: 0.3rem;
@@ -1177,7 +1109,6 @@ input.error {
         cursor: default;
         -webkit-tap-highlight-color: rgba(230, 126, 34, 0.3);
     }
-
     .menu-item:active,
     .filtro-btn:active,
     .producto-card:active,
@@ -1198,15 +1129,12 @@ input.error {
     .sistema-pos {
         grid-template-columns: 280px 1fr 400px;
     }
-
     .sistema-pos.carrito-oculto {
         grid-template-columns: 280px 1fr 0;
     }
-
     .productos-grid {
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     }
-
     .producto-card {
         min-height: 160px;
     }

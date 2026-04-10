@@ -1,4 +1,3 @@
-// js/ticket-printer.js
 class TicketPrinter {
     constructor() {
         this.printerConnected = false;
@@ -7,7 +6,6 @@ class TicketPrinter {
     }
 
     initHiddenIframe() {
-        // Crear un iframe oculto que reutilizaremos para todas las impresiones
         if (!this.printIframe) {
             this.printIframe = document.createElement('iframe');
             this.printIframe.style.position = 'absolute';
@@ -23,24 +21,40 @@ class TicketPrinter {
 
     async printTicket(venta, autoPrint = true) {
         const ticketHtml = this.generateTicketHTML(venta);
-        
+
         if (autoPrint) {
             this.printThermalSilent(ticketHtml);
         }
-        
+
         return ticketHtml;
     }
 
+    formatearFecha(valor) {
+        if (typeof valor === 'string') {
+            const d = new Date(valor);
+            if (isNaN(d.getTime())) {
+                return valor;
+            }
+            return `${d.toLocaleDateString('es-MX')} ${d.toLocaleTimeString('es-MX')}`;
+        }
+
+        if (valor instanceof Date && !isNaN(valor.getTime())) {
+            return `${valor.toLocaleDateString('es-MX')} ${valor.toLocaleTimeString('es-MX')}`;
+        }
+
+        const ahora = new Date();
+        return `${ahora.toLocaleDateString('es-MX')} ${ahora.toLocaleTimeString('es-MX')}`;
+    }
+
     generateTicketHTML(venta) {
-        const fecha = new Date(venta.fecha);
-        const fechaFormateada = `${fecha.toLocaleDateString()} ${fecha.toLocaleTimeString()}`;
-        
+        const fechaFormateada = this.formatearFecha(venta.fecha);
+
         const itemsHTML = venta.items.map(item => {
-            const precio = parseFloat(item.precio) || 0;
+            const precio   = parseFloat(item.precio)   || 0;
             const subtotal = parseFloat(item.subtotal) || 0;
-            const cantidad = parseInt(item.cantidad) || 0;
-            const nombre = item.nombre || '';
-            
+            const cantidad = parseInt(item.cantidad)   || 0;
+            const nombre   = item.nombre               || '';
+
             return `
                 <div class="ticket-line">
                     <span class="item-name">${this.truncate(nombre, 28)}</span>
@@ -50,11 +64,11 @@ class TicketPrinter {
                 </div>
             `;
         }).join('');
-        
+
         let pagoHTML = '';
         if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
             const efectivoRecibido = parseFloat(venta.efectivo_recibido) || 0;
-            const cambio = parseFloat(venta.cambio) || 0;
+            const cambio           = parseFloat(venta.cambio)            || 0;
             pagoHTML = `
                 <div class="ticket-line">
                     <span>Efectivo recibido:</span>
@@ -66,10 +80,10 @@ class TicketPrinter {
                 </div>
             `;
         }
-        
+
         const subtotal = parseFloat(venta.subtotal) || 0;
-        const total = parseFloat(venta.total) || 0;
-        
+        const total    = parseFloat(venta.total)    || 0;
+
         return `
             <!DOCTYPE html>
             <html>
@@ -160,6 +174,33 @@ class TicketPrinter {
                         margin: 3px 0;
                         font-weight: bold;
                     }
+
+                    /* ── Garantía ── */
+                    .garantia {
+                        margin-top: 10px;
+                        padding: 6px 4px;
+                        border: 1px solid #000;
+                        border-radius: 2px;
+                    }
+                    .garantia-title {
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 11px;
+                        letter-spacing: 1px;
+                        margin-bottom: 5px;
+                        text-decoration: underline;
+                    }
+                    .garantia-item {
+                        font-size: 10px;
+                        margin: 3px 0;
+                        padding-left: 2px;
+                        line-height: 1.4;
+                    }
+                    .garantia-item::before {
+                        content: "• ";
+                        font-weight: bold;
+                    }
+
                     .footer {
                         text-align: center;
                         margin-top: 10px;
@@ -176,12 +217,15 @@ class TicketPrinter {
             </head>
             <body>
                 <div class="ticket">
+
+                    <!-- Encabezado -->
                     <div class="header">
                         <h1>🏪 PINTUMEX</h1>
                         <p>Punto de Venta</p>
                         <p>${fechaFormateada}</p>
                     </div>
-                    
+
+                    <!-- Información de la venta -->
                     <div class="info">
                         <div class="info-line">
                             <span>FOLIO:</span>
@@ -189,10 +233,11 @@ class TicketPrinter {
                         </div>
                         <div class="info-line">
                             <span>CAJERO:</span>
-                            <span>Administrador</span>
+                            <span>Pintumex Tepeaca</span>
                         </div>
                     </div>
-                    
+
+                    <!-- Productos -->
                     <div class="items">
                         <div class="ticket-line" style="border-bottom: 1px dotted #000; margin-bottom: 3px;">
                             <span class="item-name">PRODUCTO</span>
@@ -202,7 +247,8 @@ class TicketPrinter {
                         </div>
                         ${itemsHTML}
                     </div>
-                    
+
+                    <!-- Totales -->
                     <div class="totales">
                         <div class="ticket-line">
                             <span>SUBTOTAL:</span>
@@ -218,14 +264,33 @@ class TicketPrinter {
                             <span>${venta.metodo_pago || ''}</span>
                         </div>
                     </div>
-                    
+
+                    <!-- ── Sección de Garantía ── -->
+                    <div class="garantia">
+                        <div class="garantia-title">★ POLÍTICA DE CAMBIOS ★</div>
+                        <div class="garantia-item">
+                            Cambios válidos dentro de las <strong>48 horas</strong>
+                            siguientes a la compra.
+                        </div>
+                        <div class="garantia-item">
+                            El producto debe estar <strong>sellado, sin uso y en
+                            perfectas condiciones</strong>.
+                        </div>
+                        <div class="garantia-item">
+                            Es <strong>indispensable presentar este ticket</strong>
+                            al momento de solicitar el cambio.
+                        </div>
+                    </div>
+
+                    <!-- Pie de página -->
                     <div class="footer">
                         <hr>
                         <p>¡Gracias por su compra!</p>
                         <p>Vuelva pronto</p>
                         <hr>
-                        <p style="font-size: 9px;">https://localhost/pintumex_pos/</p>
+                        <p style="font-size: 9px;">https://pintumex.com.mx</p>
                     </div>
+
                 </div>
             </body>
             </html>
@@ -234,24 +299,20 @@ class TicketPrinter {
 
     printThermalSilent(ticketHtml) {
         try {
-            // Reutilizar el iframe oculto
             if (!this.printIframe) {
                 this.initHiddenIframe();
             }
-            
-            // Escribir el contenido en el iframe
+
             const iframeDoc = this.printIframe.contentWindow.document;
             iframeDoc.open();
             iframeDoc.write(ticketHtml);
             iframeDoc.close();
-            
-            // Pequeña pausa para asegurar que el contenido se cargó
+
             setTimeout(() => {
                 try {
                     this.printIframe.contentWindow.focus();
                     this.printIframe.contentWindow.print();
-                    
-                    // Limpiar el iframe después de imprimir para liberar memoria
+
                     setTimeout(() => {
                         if (iframeDoc.body) {
                             iframeDoc.body.innerHTML = '';
@@ -262,7 +323,7 @@ class TicketPrinter {
                     this.printFallback(ticketHtml);
                 }
             }, 100);
-            
+
         } catch (error) {
             console.error('Error en impresión silenciosa:', error);
             this.printFallback(ticketHtml);
@@ -270,20 +331,19 @@ class TicketPrinter {
     }
 
     printFallback(ticketHtml) {
-        // Fallback: usar un iframe temporal si el principal falla
         const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
+        iframe.style.position   = 'absolute';
+        iframe.style.width      = '0';
+        iframe.style.height     = '0';
+        iframe.style.border     = 'none';
         iframe.style.visibility = 'hidden';
         document.body.appendChild(iframe);
-        
+
         const iframeDoc = iframe.contentWindow.document;
         iframeDoc.open();
         iframeDoc.write(ticketHtml);
         iframeDoc.close();
-        
+
         setTimeout(() => {
             iframe.contentWindow.print();
             setTimeout(() => {
@@ -299,5 +359,4 @@ class TicketPrinter {
     }
 }
 
-// Inicializar el printer
 window.ticketPrinter = new TicketPrinter();
