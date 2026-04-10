@@ -55,17 +55,19 @@ CREATE TABLE IF NOT EXISTS ventas (
         FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- producto_id acepta NULL para que al eliminar un producto
+-- los detalles de ventas históricas se conserven con NULL en ese campo.
 CREATE TABLE IF NOT EXISTS detalles_venta (
     id               INT AUTO_INCREMENT PRIMARY KEY,
     venta_id         INT           NOT NULL,
-    producto_id      INT           NOT NULL,
+    producto_id      INT           NULL,
     cantidad         INT           NOT NULL,
     precio_unitario  DECIMAL(10,2) NOT NULL,
     subtotal         DECIMAL(10,2) NOT NULL,
     CONSTRAINT fk_detalles_venta
         FOREIGN KEY (venta_id)    REFERENCES ventas(id)    ON DELETE CASCADE,
     CONSTRAINT fk_detalles_producto
-        FOREIGN KEY (producto_id) REFERENCES productos(id)
+        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS movimientos_inventario (
@@ -104,6 +106,51 @@ CREATE TABLE IF NOT EXISTS cancelaciones_venta (
     CONSTRAINT fk_cancelacion_venta
         FOREIGN KEY (venta_id) REFERENCES ventas(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Migración para bases de datos ya existentes ──────────────────────────────
+-- Si la tabla detalles_venta ya existe, ajustar la columna y la FK para
+-- permitir NULL en producto_id y usar ON DELETE SET NULL.
+DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
+
+DELIMITER $$
+
+CREATE PROCEDURE migrar_fk_detalles_producto()
+BEGIN
+    -- Solo ejecutar si la columna producto_id es NOT NULL actualmente
+    IF EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE table_schema = DATABASE()
+          AND table_name   = 'detalles_venta'
+          AND column_name  = 'producto_id'
+          AND is_nullable  = 'NO'
+    ) THEN
+        -- Eliminar la FK existente si existe
+        IF EXISTS (
+            SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+            WHERE table_schema    = DATABASE()
+              AND table_name      = 'detalles_venta'
+              AND constraint_name = 'fk_detalles_producto'
+              AND constraint_type = 'FOREIGN KEY'
+        ) THEN
+            ALTER TABLE detalles_venta DROP FOREIGN KEY fk_detalles_producto;
+        END IF;
+
+        -- Cambiar la columna para aceptar NULL
+        ALTER TABLE detalles_venta
+            MODIFY COLUMN producto_id INT NULL;
+
+        -- Volver a crear la FK con ON DELETE SET NULL
+        ALTER TABLE detalles_venta
+            ADD CONSTRAINT fk_detalles_producto
+                FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL;
+    END IF;
+END$$
+
+DELIMITER ;
+
+CALL migrar_fk_detalles_producto();
+DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
+-- ─────────────────────────────────────────────────────────────────────────────
 
 DROP PROCEDURE IF EXISTS crear_indices;
 

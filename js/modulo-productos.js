@@ -20,32 +20,33 @@ class ModuloProductos {
         this.cargarEventos();
     }
 
- _ocultarCarrito() {
-    const carritoPanel = document.querySelector('.carrito-panel');
-    const sistemaPos = document.getElementById('sistemaPos');
-    if (carritoPanel) {
-        carritoPanel.dataset.prevDisplay = carritoPanel.style.display || '';
-        carritoPanel.style.display = 'none';
+    _ocultarCarrito() {
+        const carritoPanel = document.querySelector('.carrito-panel');
+        const sistemaPos = document.getElementById('sistemaPos');
+        if (carritoPanel) {
+            carritoPanel.dataset.prevDisplay = carritoPanel.style.display || '';
+            carritoPanel.style.display = 'none';
+        }
+        if (sistemaPos) {
+            sistemaPos.classList.add('carrito-oculto');
+        }
+        const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
+        if (toggleCarrito) toggleCarrito.style.display = 'none';
     }
-    if (sistemaPos) {
-        sistemaPos.classList.add('carrito-oculto');
-    }
-    const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
-    if (toggleCarrito) toggleCarrito.style.display = 'none';
-}
 
-_mostrarCarrito() {
-    const carritoPanel = document.querySelector('.carrito-panel');
-    const sistemaPos = document.getElementById('sistemaPos');
-    if (carritoPanel) {
-        carritoPanel.style.display = carritoPanel.dataset.prevDisplay || '';
+    _mostrarCarrito() {
+        const carritoPanel = document.querySelector('.carrito-panel');
+        const sistemaPos = document.getElementById('sistemaPos');
+        if (carritoPanel) {
+            carritoPanel.style.display = carritoPanel.dataset.prevDisplay || '';
+        }
+        if (sistemaPos) {
+            sistemaPos.classList.remove('carrito-oculto');
+        }
+        const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
+        if (toggleCarrito) toggleCarrito.style.display = '';
     }
-    if (sistemaPos) {
-        sistemaPos.classList.remove('carrito-oculto');
-    }
-    const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
-    if (toggleCarrito) toggleCarrito.style.display = '';
-}
+
     async cargarProductos() {
         if (this.cargando) return;
         this.cargando = true;
@@ -88,9 +89,9 @@ _mostrarCarrito() {
     }
 
     async buscarProductos() {
-        const terminoInput  = document.getElementById('buscarProductoInput');
+        const terminoInput    = document.getElementById('buscarProductoInput');
         const categoriaSelect = document.getElementById('categoriaFiltro');
-        const termino   = terminoInput  ? terminoInput.value  : '';
+        const termino   = terminoInput    ? terminoInput.value   : '';
         const categoria = categoriaSelect ? categoriaSelect.value : 'Todas';
 
         this.terminoBusqueda = termino;
@@ -98,7 +99,7 @@ _mostrarCarrito() {
 
         try {
             let url = `${this.apiUrl}?accion=buscarProductosAdmin&_t=${Date.now()}`;
-            if (termino)                       url += `&termino=${encodeURIComponent(termino)}`;
+            if (termino)                            url += `&termino=${encodeURIComponent(termino)}`;
             if (categoria && categoria !== 'Todas') url += `&categoria=${encodeURIComponent(categoria)}`;
 
             const response = await fetch(url);
@@ -169,10 +170,9 @@ _mostrarCarrito() {
 
         let html = '';
         for (const p of this.productos) {
-            const stockClass   = p.stock_actual <= 0
+            const stockClass = p.stock_actual <= 0
                 ? 'stock-critico'
                 : p.stock_actual <= p.stock_minimo ? 'stock-bajo' : 'stock-normal';
-            const puedeEliminar = !(p.ventas_asociadas && p.ventas_asociadas > 0);
 
             html += `
                 <tr data-id="${p.id}">
@@ -201,8 +201,7 @@ _mostrarCarrito() {
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="btn-eliminar" data-id="${p.id}" title="Eliminar"
-                            ${!puedeEliminar ? 'disabled' : ''}
-                            style="background:var(--danger);color:white;border:none;width:32px;height:32px;border-radius:8px;cursor:${!puedeEliminar ? 'not-allowed' : 'pointer'};opacity:${!puedeEliminar ? '.5' : '1'};transition:all .2s;">
+                            style="background:var(--danger);color:white;border:none;width:32px;height:32px;border-radius:8px;cursor:pointer;transition:all .2s;">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -218,7 +217,8 @@ _mostrarCarrito() {
             btn.addEventListener('mouseleave', e => e.currentTarget.style.transform = 'scale(1)');
         });
 
-        container.querySelectorAll('.btn-eliminar:not([disabled])').forEach(btn => {
+        // Todos los botones eliminar están siempre habilitados
+        container.querySelectorAll('.btn-eliminar').forEach(btn => {
             btn.addEventListener('click', e => { e.stopPropagation(); this.confirmarEliminar(parseInt(btn.dataset.id)); });
             btn.addEventListener('mouseenter', e => e.currentTarget.style.transform = 'scale(1.1)');
             btn.addEventListener('mouseleave', e => e.currentTarget.style.transform = 'scale(1)');
@@ -381,15 +381,9 @@ _mostrarCarrito() {
         const producto = this.productos.find(p => p.id === id);
         if (!producto) return;
 
-        if (producto.ventas_asociadas && producto.ventas_asociadas > 0) {
-            this.mostrarNotificacion(
-                `No se puede eliminar "${producto.nombre}" porque tiene ${producto.ventas_asociadas} venta(s) asociada(s)`,
-                'error'
-            );
-            return;
-        }
-
-        if (!confirm(`¿Está seguro de eliminar el producto "${producto.nombre}"?\nEsta acción no se puede deshacer.`)) return;
+        // Sin restricciones: cualquier producto puede eliminarse.
+        // Las ventas históricas se conservan con producto_id = NULL en la BD.
+        if (!confirm(`¿Está seguro de eliminar el producto "${producto.nombre}"?\n\nEsta acción no se puede deshacer.\nLas ventas históricas que incluyan este producto permanecerán intactas.`)) return;
 
         try {
             const formData = new FormData();
@@ -467,7 +461,6 @@ _mostrarCarrito() {
 
         const folioInput = container.querySelector('#folioInput');
 
-        // Estilos de foco
         folioInput.addEventListener('focus', () => {
             folioInput.style.borderColor = 'var(--secondary)';
             folioInput.style.boxShadow   = '0 0 0 3px rgba(43,124,48,.2)';
@@ -516,10 +509,8 @@ _mostrarCarrito() {
             }
 
             if (data.unico) {
-                // Una sola coincidencia → mostrar directamente
                 this.renderizarTicketEncontrado(data.venta, data.detalles);
             } else {
-                // Múltiples coincidencias → mostrar lista para elegir
                 this.renderizarListaTickets(data.ventas);
             }
 
@@ -534,7 +525,6 @@ _mostrarCarrito() {
         }
     }
 
-    /** Muestra lista cuando hay múltiples resultados */
     renderizarListaTickets(ventas) {
         const resultado = document.getElementById('ticketResultado');
         if (!resultado) return;
@@ -595,7 +585,6 @@ _mostrarCarrito() {
         });
     }
 
-    /** Carga detalles de una venta por ID y la muestra */
     async cargarDetallesYMostrar(ventaId) {
         const resultado = document.getElementById('ticketResultado');
         if (!resultado) return;
@@ -630,12 +619,11 @@ _mostrarCarrito() {
 
         const fecha = new Date(venta.fecha).toLocaleString();
         const total = parseFloat(venta.total).toFixed(2);
-
         const esCancelado = venta.estado === 'cancelada';
 
         const detallesHTML = detalles.map(d => `
             <tr>
-                <td style="padding:.6rem 1rem;">${this.escapeHTML(d.producto_nombre)}</td>
+                <td style="padding:.6rem 1rem;">${this.escapeHTML(d.producto_nombre || '(producto eliminado)')}</td>
                 <td style="padding:.6rem 1rem;text-align:center;">${d.cantidad}</td>
                 <td style="padding:.6rem 1rem;text-align:right;">$${parseFloat(d.precio_unitario).toFixed(2)}</td>
                 <td style="padding:.6rem 1rem;text-align:right;font-weight:bold;">$${parseFloat(d.subtotal).toFixed(2)}</td>
@@ -724,7 +712,6 @@ _mostrarCarrito() {
             </div>
         `;
 
-        // Estilos de foco en el textarea
         const motivoTA = resultado.querySelector('#motivoCancelacion');
         if (motivoTA) {
             motivoTA.addEventListener('focus', () => {
@@ -768,10 +755,10 @@ _mostrarCarrito() {
 
         try {
             const formData = new FormData();
-            formData.append('accion',      'cancelarVenta');
-            formData.append('folio',       folio);
-            formData.append('motivo',      motivo);
-            formData.append('csrf_token',  await this.obtenerCsrfToken());
+            formData.append('accion',     'cancelarVenta');
+            formData.append('folio',      folio);
+            formData.append('motivo',     motivo);
+            formData.append('csrf_token', await this.obtenerCsrfToken());
 
             const response = await fetch(this.apiUrl, { method: 'POST', body: formData });
             const data = await response.json();
