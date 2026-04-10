@@ -131,6 +131,10 @@ class POSSystem {
 
         document.addEventListener('keypress', (e) => {
             if (!this.scannerActive) return;
+
+            const moduloActivo = document.querySelector('.menu-item.active')?.dataset?.modulo;
+            if (moduloActivo !== 'puntoventa') return;
+
             if (e.target && e.target.tagName === 'INPUT' && e.target.id === 'codigoBarras') return;
 
             const now = Date.now();
@@ -344,7 +348,6 @@ class POSSystem {
                 <h3 style="color: var(--primary); margin-bottom: 1.5rem;">
                     <i class="fas fa-keyboard" aria-hidden="true"></i> Atajos de Teclado
                 </h3>
-
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div><strong>Enter</strong> en búsqueda</div><div>Agregar producto</div>
                     <div><strong>Ctrl + P</strong></div><div>Procesar venta</div>
@@ -354,11 +357,9 @@ class POSSystem {
                     <div><strong>Flechas ↑↓</strong></div><div>Navegar sugerencias</div>
                     <div><strong>F1</strong></div><div>Mostrar ayuda</div>
                 </div>
-
                 <div style="margin-top: 2rem; padding: 1rem; background: var(--light); border-radius: var(--radius-md);">
                     <p><i class="fas fa-info-circle" aria-hidden="true"></i> También puedes hacer clic en los productos para agregarlos al carrito</p>
                 </div>
-
                 <button class="btn-cerrar-atajos"
                         style="width: 100%; margin-top: 1.5rem; padding: 1rem; background: var(--primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer;">
                     <i class="fas fa-check" aria-hidden="true"></i> Cerrar
@@ -409,11 +410,15 @@ class POSSystem {
         }
     }
 
-    // ─── Helpers para mostrar / ocultar el carrito ────────────────────────
     _mostrarCarrito() {
         const carritoPanel = document.querySelector('.carrito-panel');
+        const sistemaPos = document.getElementById('sistemaPos');
         if (carritoPanel) {
             carritoPanel.style.display = '';
+            carritoPanel.style.visibility = '';
+        }
+        if (sistemaPos) {
+            sistemaPos.classList.remove('carrito-oculto');
         }
         const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
         if (toggleCarrito) toggleCarrito.style.display = '';
@@ -421,32 +426,36 @@ class POSSystem {
 
     _ocultarCarrito() {
         const carritoPanel = document.querySelector('.carrito-panel');
+        const sistemaPos = document.getElementById('sistemaPos');
         if (carritoPanel) {
             carritoPanel.classList.remove('visible');
             carritoPanel.style.display = 'none';
         }
+        if (sistemaPos) {
+            sistemaPos.classList.add('carrito-oculto');
+        }
         const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
         if (toggleCarrito) toggleCarrito.style.display = 'none';
     }
-    // ─────────────────────────────────────────────────────────────────────
 
     initModulos() {
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 const modulo = e.currentTarget.dataset.modulo;
 
+                this.scannerBuffer = '';
+                if (this.scannerTimeout) clearTimeout(this.scannerTimeout);
+
                 document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
                 e.currentTarget.classList.add('active');
 
                 document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');
 
-                // Si salimos del módulo de productos, restaurar el carrito
                 if (modulo !== 'productos') {
                     this._mostrarCarrito();
                 }
 
                 if (modulo === 'caja') {
-                    // Ocultar carrito en el módulo de caja también
                     this._ocultarCarrito();
                     if (window.moduloCaja) {
                         window.moduloCaja.mostrarModulo();
@@ -461,7 +470,6 @@ class POSSystem {
                         }, 100);
                     }
                 } else if (modulo === 'productos') {
-                    // Ocultar carrito en el módulo de productos
                     this._ocultarCarrito();
                     if (window.moduloProductos) {
                         window.moduloProductos.mostrarModulo();
@@ -523,29 +531,25 @@ class POSSystem {
             this.productos = data;
 
             const categoriaActivaActual = this.categoriaActiva;
-            const moduloVisible = document.getElementById('seccionPuntoVenta')?.style.display === 'block';
 
-            if (moduloVisible) {
-                await this.filtrarProductos();
-                this.categoriaActiva = categoriaActivaActual;
+            await this.filtrarProductos();
+            this.categoriaActiva = categoriaActivaActual;
 
-                const filtros = document.querySelectorAll('.filtro-btn');
-                filtros.forEach(btn => {
-                    if (btn.textContent === categoriaActivaActual) {
-                        btn.classList.add('active');
-                    } else {
-                        btn.classList.remove('active');
-                    }
-                });
-            }
+            const filtros = document.querySelectorAll('.filtro-btn');
+            filtros.forEach(btn => {
+                if (btn.textContent === categoriaActivaActual) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
 
             const carritoActual = this.carrito;
             if (carritoActual && carritoActual.length > 0) {
                 for (const item of carritoActual) {
                     const productoActualizado = this.productos.find(p => p.id === item.id);
                     if (productoActualizado) {
-                        const cantidadCarrito = item.cantidad;
-                        if (cantidadCarrito > productoActualizado.stock_actual) {
+                        if (item.cantidad > productoActualizado.stock_actual) {
                             await this.modificarCantidad(item.id, productoActualizado.stock_actual);
                             this.mostrarNotificacion(`⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`, 'warning');
                         }

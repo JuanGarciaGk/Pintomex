@@ -1,4 +1,4 @@
-// modulo-caja.js - Versión corregida con persistencia del historial
+// modulo-caja.js
 
 class ModuloCaja {
     constructor() {
@@ -19,10 +19,10 @@ class ModuloCaja {
         if (savedState !== null) {
             this.montosOcultos = savedState === 'true';
         }
-        
+
         await this.verificarEstadoCaja();
         this.cargarEventos();
-        
+
         if ('requestIdleCallback' in window) {
             requestIdleCallback(() => {
                 const menuActivo = document.querySelector('.menu-item.active');
@@ -38,9 +38,15 @@ class ModuloCaja {
                 }
             }, 500);
         }
-        
+
         this.inicializado = true;
-        
+
+        // Escuchar cancelaciones de ticket para refrescar montos de inmediato
+        window.addEventListener('productos-actualizados', () => {
+            this.isUpdating = false;
+            this.verificarEstadoCaja();
+        });
+
         this.refreshInterval = setInterval(() => {
             if (this.cajaAbierta && document.getElementById('moduloCaja')?.style.display === 'block') {
                 this.verificarEstadoCaja();
@@ -51,11 +57,11 @@ class ModuloCaja {
     toggleMontosVisibility() {
         this.montosOcultos = !this.montosOcultos;
         localStorage.setItem('caja_montos_ocultos', this.montosOcultos);
-        
+
         const montosElements = document.querySelectorAll('.monto-value');
         const toggleIcon = document.getElementById('toggleMontosIcon');
         const toggleBtn = document.getElementById('btnToggleMontos');
-        
+
         montosElements.forEach(element => {
             if (this.montosOcultos) {
                 if (!element.dataset.realValue && element.textContent) {
@@ -70,11 +76,11 @@ class ModuloCaja {
                 element.classList.remove('montos-ocultos');
             }
         });
-        
+
         if (toggleIcon) {
             toggleIcon.className = this.montosOcultos ? 'fas fa-eye-slash' : 'fas fa-eye';
         }
-        
+
         if (toggleBtn) {
             toggleBtn.setAttribute('aria-label', this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos');
             toggleBtn.setAttribute('title', this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos');
@@ -84,7 +90,7 @@ class ModuloCaja {
     async toggleHistorial() {
         this.historialVisible = !this.historialVisible;
         const historialContainer = document.getElementById('historialContainer');
-        
+
         if (this.historialVisible) {
             await this.mostrarHistorial();
             if (historialContainer) {
@@ -104,7 +110,7 @@ class ModuloCaja {
         if (tokenMeta) {
             return tokenMeta.getAttribute('content');
         }
-        
+
         try {
             const response = await fetch(this.apiUrl + '?accion=getCsrfToken');
             const data = await response.json();
@@ -114,17 +120,17 @@ class ModuloCaja {
         } catch (error) {
             console.error('Error obteniendo CSRF token:', error);
         }
-        
+
         return '';
     }
 
     async fetchWithCsrf(url, options = {}) {
         const csrfToken = await this.obtenerCsrfToken();
-        
+
         if (!options.headers) {
             options.headers = {};
         }
-        
+
         if (options.body instanceof FormData) {
             options.body.append('csrf_token', csrfToken);
         } else if (options.body && typeof options.body === 'object') {
@@ -132,13 +138,13 @@ class ModuloCaja {
             options.body = JSON.stringify(options.body);
             options.headers['Content-Type'] = 'application/json';
         }
-        
+
         options.headers['X-CSRF-Token'] = csrfToken;
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         options.signal = controller.signal;
-        
+
         try {
             const response = await fetch(url, options);
             clearTimeout(timeoutId);
@@ -155,25 +161,25 @@ class ModuloCaja {
     async verificarEstadoCaja() {
         if (this.isUpdating) return;
         this.isUpdating = true;
-        
+
         try {
             const response = await this.fetchWithCsrf(this.apiUrl + '?accion=getEstadoCaja');
             const data = await response.json();
-            
+
             if (data.success) {
                 const estabaAbierta = this.cajaAbierta;
                 this.cajaAbierta = data.caja_abierta;
                 this.datosCaja = data.caja_abierta ? data.caja : null;
-                
+
                 if (this.datosCaja) {
-                    this.datosCaja.monto_inicial = parseFloat(this.datosCaja.monto_inicial) || 0;
-                    this.datosCaja.total_ventas_hoy = parseFloat(data.total_ventas_hoy) || 0;
-                    this.datosCaja.total_electronico = parseFloat(data.total_electronico) || 0;
-                    this.datosCaja.total_gastos = parseFloat(data.total_gastos) || 0;
-                    this.datosCaja.ventas_hoy = parseInt(data.ventas_hoy) || 0;
-                    this.datosCaja.ventas_efectivo = parseInt(data.ventas_efectivo) || 0;
+                    this.datosCaja.monto_inicial      = parseFloat(data.caja.monto_inicial)   || 0;
+                    this.datosCaja.total_ventas_hoy   = parseFloat(data.total_ventas_hoy)     || 0;
+                    this.datosCaja.total_electronico  = parseFloat(data.total_electronico)    || 0;
+                    this.datosCaja.total_gastos       = parseFloat(data.total_gastos)         || 0;
+                    this.datosCaja.ventas_hoy         = parseInt(data.ventas_hoy)             || 0;
+                    this.datosCaja.ventas_efectivo    = parseInt(data.ventas_efectivo)        || 0;
                 }
-                
+
                 if (document.getElementById('moduloCaja')?.style.display === 'block') {
                     const estadoHistorialAnterior = this.historialVisible;
                     this.actualizarUI();
@@ -199,7 +205,7 @@ class ModuloCaja {
         if (!contenedor) return;
 
         const estadoHistorial = this.historialVisible;
-        
+
         requestAnimationFrame(() => {
             if (this.cajaAbierta) {
                 contenedor.innerHTML = this.renderCajaAbierta();
@@ -208,7 +214,7 @@ class ModuloCaja {
                 this.historialVisible = false;
             }
             this.cargarEventosInternos();
-            
+
             const historialContainer = document.getElementById('historialContainer');
             if (historialContainer) {
                 if (estadoHistorial && this.cajaAbierta) {
@@ -226,21 +232,21 @@ class ModuloCaja {
             <div class="modulo-caja">
                 <div class="caja-header">
                     <h2>
-                        <i class="fas fa-cash-register" style="color: var(--secondary);"></i> 
+                        <i class="fas fa-cash-register" style="color: var(--secondary);"></i>
                         Módulo de Caja
                     </h2>
                     <div class="estado-caja cerrada">
-                        <i class="fas fa-times-circle"></i> 
+                        <i class="fas fa-times-circle"></i>
                         Caja Cerrada
                     </div>
                 </div>
-                
+
                 <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%); border-radius: var(--radius-lg); margin-bottom: 2rem;">
                     <i class="fas fa-door-closed" style="font-size: 4rem; color: var(--gray); opacity: 0.5; margin-bottom: 1rem;"></i>
                     <h3 style="color: var(--primary); margin-bottom: 0.5rem;">No hay caja abierta</h3>
                     <p style="color: var(--gray);">Para comenzar a operar, abra una nueva caja</p>
                 </div>
-                
+
                 <div class="caja-acciones">
                     <div class="accion-card" data-accion="abrir">
                         <i class="fas fa-door-open"></i>
@@ -253,59 +259,61 @@ class ModuloCaja {
                         <p>Ver cortes de caja anteriores</p>
                     </div>
                 </div>
-                
+
                 <div id="historialContainer" style="display: none;"></div>
             </div>
         `;
     }
 
     renderCajaAbierta() {
-        const montoInicial = this.datosCaja?.monto_inicial || 0;
-        const totalVentasEfectivo = this.datosCaja?.total_ventas_hoy || 0;
-        const totalElectronico = this.datosCaja?.total_electronico || 0;
-        const totalGastos = this.datosCaja?.total_gastos || 0;
-        const ventasHoy = this.datosCaja?.ventas_hoy || 0;
-        const ventasEfectivo = this.datosCaja?.ventas_efectivo || 0;
-        const esperado = montoInicial + totalVentasEfectivo - totalGastos;
-        const fechaApertura = this.datosCaja?.fecha_apertura ? new Date(this.datosCaja.fecha_apertura).toLocaleString() : '';
+        const montoInicial        = this.datosCaja?.monto_inicial      || 0;
+        const totalVentasEfectivo = this.datosCaja?.total_ventas_hoy   || 0;
+        const totalElectronico    = this.datosCaja?.total_electronico   || 0;
+        const totalGastos         = this.datosCaja?.total_gastos        || 0;
+        const ventasHoy           = this.datosCaja?.ventas_hoy          || 0;
+        const ventasEfectivo      = this.datosCaja?.ventas_efectivo     || 0;
+        const esperado            = montoInicial + totalVentasEfectivo - totalGastos;
+        const fechaApertura       = this.datosCaja?.fecha_apertura
+            ? new Date(this.datosCaja.fecha_apertura).toLocaleString()
+            : '';
 
-        const mostrarMontoInicial = this.montosOcultos ? '******' : `$${montoInicial.toFixed(2)}`;
-        const mostrarVentasEfectivo = this.montosOcultos ? '******' : `$${totalVentasEfectivo.toFixed(2)}`;
+        const mostrarMontoInicial      = this.montosOcultos ? '******' : `$${montoInicial.toFixed(2)}`;
+        const mostrarVentasEfectivo    = this.montosOcultos ? '******' : `$${totalVentasEfectivo.toFixed(2)}`;
         const mostrarVentasElectronico = this.montosOcultos ? '******' : `$${totalElectronico.toFixed(2)}`;
-        const mostrarTotalEsperado = this.montosOcultos ? '******' : `$${esperado.toFixed(2)}`;
+        const mostrarTotalEsperado     = this.montosOcultos ? '******' : `$${esperado.toFixed(2)}`;
 
         return `
             <div class="modulo-caja">
                 <div class="caja-header">
                     <h2>
-                        <i class="fas fa-cash-register" style="color: var(--secondary);"></i> 
+                        <i class="fas fa-cash-register" style="color: var(--secondary);"></i>
                         Módulo de Caja
                     </h2>
                     <div style="display: flex; gap: 1rem; align-items: center;">
-                        <button class="btn-toggle-montos" id="btnToggleMontos" 
+                        <button class="btn-toggle-montos" id="btnToggleMontos"
                                 style="background: var(--primary); color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);"
-                                aria-label="${this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos'}" 
+                                aria-label="${this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos'}"
                                 title="${this.montosOcultos ? 'Mostrar montos' : 'Ocultar montos'}">
                             <i id="toggleMontosIcon" class="fas ${this.montosOcultos ? 'fa-eye-slash' : 'fa-eye'}"></i>
                         </button>
                         <div class="estado-caja abierta">
-                            <i class="fas fa-check-circle"></i> 
+                            <i class="fas fa-check-circle"></i>
                             Caja Abierta
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="caja-info-bar" style="background: var(--primary); color: white; padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                     <div>
-                        <i class="fas fa-clock"></i> 
+                        <i class="fas fa-clock"></i>
                         Abierta desde: <strong>${fechaApertura}</strong>
                     </div>
                     <div>
-                        <i class="fas fa-shopping-cart"></i> 
+                        <i class="fas fa-shopping-cart"></i>
                         Ventas hoy: <strong>${ventasHoy}</strong>
                     </div>
                 </div>
-                
+
                 <div class="caja-resumen">
                     <div class="resumen-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
@@ -316,7 +324,7 @@ class ModuloCaja {
                         </div>
                         <div class="cantidad monto-value" data-real-value="$${montoInicial.toFixed(2)}">${mostrarMontoInicial}</div>
                     </div>
-                    
+
                     <div class="resumen-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                             <div style="width: 40px; height: 40px; background: rgba(39, 174, 96, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
@@ -327,7 +335,7 @@ class ModuloCaja {
                         <div class="cantidad monto-value" data-real-value="$${totalVentasEfectivo.toFixed(2)}">${mostrarVentasEfectivo}</div>
                         <div class="subtexto">${ventasEfectivo} transacciones</div>
                     </div>
-                    
+
                     <div class="resumen-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                             <div style="width: 40px; height: 40px; background: rgba(52, 152, 219, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
@@ -338,7 +346,7 @@ class ModuloCaja {
                         <div class="cantidad monto-value" data-real-value="$${totalElectronico.toFixed(2)}">${mostrarVentasElectronico}</div>
                         <div class="subtexto">Tarjeta/Transferencia</div>
                     </div>
-                    
+
                     <div class="resumen-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                             <div style="width: 40px; height: 40px; background: rgba(230, 126, 34, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
@@ -349,7 +357,7 @@ class ModuloCaja {
                         <div class="cantidad">-$${totalGastos.toFixed(2)}</div>
                         <div class="subtexto">Egresos registrados</div>
                     </div>
-                    
+
                     <div class="resumen-card" style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: white; border: none;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                             <div style="width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
@@ -361,7 +369,7 @@ class ModuloCaja {
                         <div class="subtexto" style="color: rgba(255,255,255,0.8);">Inicial + Efectivo - Gastos</div>
                     </div>
                 </div>
-                
+
                 <div class="caja-acciones">
                     <div class="accion-card" data-accion="cerrar">
                         <i class="fas fa-door-closed"></i>
@@ -379,7 +387,7 @@ class ModuloCaja {
                         <p>Ver cortes de caja anteriores</p>
                     </div>
                 </div>
-                
+
                 <div id="historialContainer" style="display: none;"></div>
             </div>
         `;
@@ -388,7 +396,7 @@ class ModuloCaja {
     cargarEventosInternos() {
         const contenedor = document.getElementById('moduloCajaContent');
         if (!contenedor) return;
-        
+
         const toggleBtn = document.getElementById('btnToggleMontos');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
@@ -396,84 +404,74 @@ class ModuloCaja {
                 this.toggleMontosVisibility();
             });
         }
-        
+
         contenedor.querySelectorAll('.accion-card').forEach(card => {
-            card.addEventListener('click', (e) => {
+            card.addEventListener('click', () => {
                 const accion = card.dataset.accion;
-                if (accion === 'abrir') {
-                    this.mostrarModalApertura();
-                } else if (accion === 'cerrar') {
-                    this.mostrarModalCierre();
-                } else if (accion === 'gasto') {
-                    this.mostrarModalGasto();
-                } else if (accion === 'historial') {
-                    this.toggleHistorial();
-                }
+                if (accion === 'abrir')      this.mostrarModalApertura();
+                else if (accion === 'cerrar')   this.mostrarModalCierre();
+                else if (accion === 'gasto')    this.mostrarModalGasto();
+                else if (accion === 'historial') this.toggleHistorial();
             });
         });
     }
 
     mostrarModalApertura() {
         this.cerrarModalActual();
-        
+
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.id = 'modalAperturaCaja';
         modal.style.display = 'flex';
-        
+
         modal.innerHTML = `
             <div class="modal-contenido modal-caja">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-door-open" style="color: var(--secondary);"></i> 
+                        <i class="fas fa-door-open" style="color: var(--secondary);"></i>
                         Abrir Caja
                     </h3>
                     <button class="cerrar-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray);">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                
+
                 <div style="background: #f8fafc; padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
                     <p style="margin-bottom: 0.5rem; color: var(--gray);">
                         <i class="fas fa-info-circle" style="color: var(--secondary);"></i>
                         Ingrese el monto con el que inicia la caja
                     </p>
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-dollar-sign"></i> 
-                        Monto Inicial
-                    </label>
+                    <label><i class="fas fa-dollar-sign"></i> Monto Inicial</label>
                     <input type="number" id="montoInicial" min="0" step="0.01" placeholder="0.00" autofocus>
                 </div>
-                
+
                 <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                     <button class="btn-confirmar" style="flex: 1; padding: 1rem; background: var(--success); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-check"></i> 
-                        Abrir Caja
+                        <i class="fas fa-check"></i> Abrir Caja
                     </button>
                     <button class="btn-cancelar" style="flex: 1; padding: 1rem; background: var(--danger); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-times"></i> 
-                        Cancelar
+                        <i class="fas fa-times"></i> Cancelar
                     </button>
                 </div>
             </div>
         `;
-        
+
         this.modalActual = modal;
         document.body.appendChild(modal);
-        
+
         modal.querySelector('.cerrar-modal')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-cancelar')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-confirmar')?.addEventListener('click', () => this.procesarApertura());
-        
+
         document.getElementById('montoInicial')?.focus();
     }
 
     async procesarApertura() {
         const monto = document.getElementById('montoInicial')?.value;
-        
+
         if (!monto || parseFloat(monto) < 0) {
             this.mostrarNotificacion('Ingrese un monto válido', 'warning');
             return;
@@ -488,9 +486,9 @@ class ModuloCaja {
                 method: 'POST',
                 body: formData
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.cerrarModalActual();
                 this.mostrarNotificacion('✅ Caja abierta exitosamente', 'success');
@@ -510,35 +508,35 @@ class ModuloCaja {
             this.mostrarNotificacion('No hay caja abierta', 'warning');
             return;
         }
-        
+
         this.cerrarModalActual();
-        
-        const montoInicial = this.datosCaja?.monto_inicial || 0;
+
+        const montoInicial        = this.datosCaja?.monto_inicial    || 0;
         const totalVentasEfectivo = this.datosCaja?.total_ventas_hoy || 0;
-        const totalElectronico = this.datosCaja?.total_electronico || 0;
-        const totalGastos = this.datosCaja?.total_gastos || 0;
-        const esperado = montoInicial + totalVentasEfectivo - totalGastos;
-        
+        const totalElectronico    = this.datosCaja?.total_electronico || 0;
+        const totalGastos         = this.datosCaja?.total_gastos      || 0;
+        const esperado            = montoInicial + totalVentasEfectivo - totalGastos;
+
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.id = 'modalCierreCaja';
         modal.style.display = 'flex';
-        
+
         modal.innerHTML = `
             <div class="modal-contenido modal-caja">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-door-closed" style="color: var(--secondary);"></i> 
+                        <i class="fas fa-door-closed" style="color: var(--secondary);"></i>
                         Cerrar Caja
                     </h3>
                     <button class="cerrar-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray);">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                
+
                 <div class="resumen-cierre" style="background: #f8fafc; padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
                     <h4 style="color: var(--primary); margin-bottom: 1rem;">Resumen del día</h4>
-                    
+
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem;">
                         <span>Monto Inicial:</span>
                         <span style="font-weight: bold;">$${montoInicial.toFixed(2)}</span>
@@ -555,7 +553,7 @@ class ModuloCaja {
                         <span>Gastos del Día:</span>
                         <span style="font-weight: bold; color: #e67e22;">-$${totalGastos.toFixed(2)}</span>
                     </div>
-                    
+
                     <div style="border-top: 2px dashed var(--light); padding-top: 1rem; margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; font-size: 1.2rem;">
                             <span style="font-weight: bold;">Esperado en Efectivo:</span>
@@ -563,48 +561,40 @@ class ModuloCaja {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-money-bill"></i> 
-                        Monto Final en Caja (Efectivo Físico)
-                    </label>
+                    <label><i class="fas fa-money-bill"></i> Monto Final en Caja (Efectivo Físico)</label>
                     <input type="number" id="montoFinal" min="0" step="0.01" placeholder="0.00" autofocus>
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-comment"></i> 
-                        Observaciones
-                    </label>
+                    <label><i class="fas fa-comment"></i> Observaciones</label>
                     <textarea id="observacionesCierre" rows="3" placeholder="Notas adicionales..."></textarea>
                 </div>
-                
+
                 <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                     <button class="btn-confirmar" style="flex: 1; padding: 1rem; background: var(--success); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-check"></i> 
-                        Cerrar Caja
+                        <i class="fas fa-check"></i> Cerrar Caja
                     </button>
                     <button class="btn-cancelar" style="flex: 1; padding: 1rem; background: var(--danger); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-times"></i> 
-                        Cancelar
+                        <i class="fas fa-times"></i> Cancelar
                     </button>
                 </div>
             </div>
         `;
-        
+
         this.modalActual = modal;
         document.body.appendChild(modal);
-        
+
         modal.querySelector('.cerrar-modal')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-cancelar')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-confirmar')?.addEventListener('click', () => this.procesarCierre());
-        
+
         document.getElementById('montoFinal')?.focus();
     }
 
     async procesarCierre() {
-        const montoFinal = document.getElementById('montoFinal')?.value;
+        const montoFinal    = document.getElementById('montoFinal')?.value;
         const observaciones = document.getElementById('observacionesCierre')?.value || '';
 
         if (!montoFinal || parseFloat(montoFinal) < 0) {
@@ -622,7 +612,7 @@ class ModuloCaja {
                 method: 'POST',
                 body: formData
             });
-            
+
             const text = await response.text();
             let data;
             try {
@@ -632,7 +622,7 @@ class ModuloCaja {
                 this.mostrarNotificacion('Error del servidor', 'error');
                 return;
             }
-            
+
             if (data.success) {
                 this.cerrarModalActual();
                 this.mostrarResultadoCorte(data.datos);
@@ -649,39 +639,39 @@ class ModuloCaja {
     }
 
     mostrarResultadoCorte(datos) {
-        const inicial = parseFloat(datos.inicial) || 0;
-        const ventasEfectivo = parseFloat(datos.ventas_efectivo) || 0;
+        const inicial           = parseFloat(datos.inicial)           || 0;
+        const ventasEfectivo    = parseFloat(datos.ventas_efectivo)   || 0;
         const ventasElectronico = parseFloat(datos.ventas_electronico) || 0;
-        const gastos = parseFloat(datos.gastos) || 0;
-        const esperado = parseFloat(datos.esperado) || 0;
-        const final = parseFloat(datos.final) || 0;
-        const diferencia = parseFloat(datos.diferencia) || 0;
-        
-        const claseDiferencia = diferencia === 0 ? 'diferencia-cero' : 
+        const gastos            = parseFloat(datos.gastos)            || 0;
+        const esperado          = parseFloat(datos.esperado)          || 0;
+        const final             = parseFloat(datos.final)             || 0;
+        const diferencia        = parseFloat(datos.diferencia)        || 0;
+
+        const claseDiferencia = diferencia === 0 ? 'diferencia-cero' :
                                 (diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa');
-        
+
         const mensaje = diferencia === 0 ? '✅ TODO CUADRA PERFECTAMENTE' :
-                        (diferencia > 0 ? `💰 SOBRÓ: $${Math.abs(diferencia).toFixed(2)}` : 
-                                            `⚠️ FALTÓ: $${Math.abs(diferencia).toFixed(2)}`);
+                        (diferencia > 0 ? `💰 SOBRÓ: $${Math.abs(diferencia).toFixed(2)}` :
+                                          `⚠️ FALTÓ: $${Math.abs(diferencia).toFixed(2)}`);
 
         this.cerrarModalActual();
-        
+
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.style.display = 'flex';
-        
+
         modal.innerHTML = `
             <div class="modal-contenido modal-caja">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-clipboard-check" style="color: var(--secondary);"></i> 
+                        <i class="fas fa-clipboard-check" style="color: var(--secondary);"></i>
                         Resultado del Corte
                     </h3>
                     <button class="cerrar-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray);">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                
+
                 <div style="background: #f8fafc; padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem;">
                         <span>Inicial:</span>
@@ -699,7 +689,7 @@ class ModuloCaja {
                         <span>Gastos:</span>
                         <span style="font-weight: bold; color: #e67e22;">-$${gastos.toFixed(2)}</span>
                     </div>
-                    
+
                     <div style="border-top: 2px solid var(--light); padding-top: 0.8rem; margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem;">
                             <span>Esperado en Efectivo:</span>
@@ -710,7 +700,7 @@ class ModuloCaja {
                             <span style="font-weight: bold;">$${final.toFixed(2)}</span>
                         </div>
                     </div>
-                    
+
                     <div style="border-top: 2px dashed var(--light); padding-top: 1rem; margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; font-size: 1.3rem;">
                             <span style="font-weight: bold;">Diferencia:</span>
@@ -720,27 +710,25 @@ class ModuloCaja {
                         </div>
                     </div>
                 </div>
-                
+
                 <div style="text-align: center; padding: 1rem; background: ${diferencia === 0 ? 'var(--success)' : (diferencia > 0 ? '#27AE60' : '#E74C3C')}; color: white; border-radius: var(--radius-md); margin-bottom: 1.5rem; font-size: 1.3rem; font-weight: bold;">
                     ${mensaje}
                 </div>
-                
+
                 <div style="display: flex; gap: 1rem;">
                     <button class="btn-imprimir" style="flex: 1; padding: 1rem; background: var(--secondary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-print"></i> 
-                        Imprimir
+                        <i class="fas fa-print"></i> Imprimir
                     </button>
                     <button class="btn-cerrar" style="flex: 1; padding: 1rem; background: var(--primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-check"></i> 
-                        Aceptar
+                        <i class="fas fa-check"></i> Aceptar
                     </button>
                 </div>
             </div>
         `;
-        
+
         this.modalActual = modal;
         document.body.appendChild(modal);
-        
+
         modal.querySelector('.cerrar-modal')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-cerrar')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-imprimir')?.addEventListener('click', () => window.print());
@@ -753,72 +741,61 @@ class ModuloCaja {
         }
 
         this.cerrarModalActual();
-        
+
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.id = 'modalGasto';
         modal.style.display = 'flex';
-        
+
         modal.innerHTML = `
             <div class="modal-contenido modal-caja">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-minus-circle" style="color: #e67e22;"></i> 
+                        <i class="fas fa-minus-circle" style="color: #e67e22;"></i>
                         Registrar Gasto
                     </h3>
                     <button class="cerrar-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray);">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-tag"></i> 
-                        Concepto
-                    </label>
+                    <label><i class="fas fa-tag"></i> Concepto</label>
                     <input type="text" id="conceptoGasto" placeholder="Ej: Pago de servicios, compras...">
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-dollar-sign"></i> 
-                        Monto
-                    </label>
+                    <label><i class="fas fa-dollar-sign"></i> Monto</label>
                     <input type="number" id="montoGasto" min="0.01" step="0.01" placeholder="0.00">
                 </div>
-                
+
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-hashtag"></i> 
-                        Referencia (opcional)
-                    </label>
+                    <label><i class="fas fa-hashtag"></i> Referencia (opcional)</label>
                     <input type="text" id="referenciaGasto" placeholder="Número de factura, proveedor...">
                 </div>
-                
+
                 <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                     <button class="btn-confirmar" style="flex: 1; padding: 1rem; background: #e67e22; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-save"></i> 
-                        Guardar Gasto
+                        <i class="fas fa-save"></i> Guardar Gasto
                     </button>
                     <button class="btn-cancelar" style="flex: 1; padding: 1rem; background: var(--danger); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-times"></i> 
-                        Cancelar
+                        <i class="fas fa-times"></i> Cancelar
                     </button>
                 </div>
             </div>
         `;
-        
+
         this.modalActual = modal;
         document.body.appendChild(modal);
-        
+
         modal.querySelector('.cerrar-modal')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-cancelar')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-confirmar')?.addEventListener('click', () => this.procesarGasto());
     }
 
     async procesarGasto() {
-        const concepto = document.getElementById('conceptoGasto')?.value;
-        const monto = document.getElementById('montoGasto')?.value;
+        const concepto   = document.getElementById('conceptoGasto')?.value;
+        const monto      = document.getElementById('montoGasto')?.value;
         const referencia = document.getElementById('referenciaGasto')?.value || '';
 
         if (!concepto) {
@@ -842,9 +819,9 @@ class ModuloCaja {
                 method: 'POST',
                 body: formData
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.cerrarModalActual();
                 this.mostrarNotificacion('✅ Gasto registrado', 'success');
@@ -863,10 +840,10 @@ class ModuloCaja {
         try {
             const response = await this.fetchWithCsrf(this.apiUrl + '?accion=getHistorialCaja');
             const data = await response.json();
-            
+
             const container = document.getElementById('historialContainer');
             if (!container) return;
-            
+
             if (data.success && data.historial.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 3rem; color: var(--gray);">
@@ -877,7 +854,7 @@ class ModuloCaja {
                 `;
                 return;
             }
-            
+
             if (data.success) {
                 container.innerHTML = `
                     <div style="margin: 2rem 0 1rem;">
@@ -893,7 +870,7 @@ class ModuloCaja {
                             </button>
                         </div>
                     </div>
-                    
+
                     <div class="table-responsive">
                         <table class="tabla-historial">
                             <thead>
@@ -911,17 +888,18 @@ class ModuloCaja {
                             </thead>
                             <tbody>
                                 ${data.historial.map(corte => {
-                                    const montoInicial = parseFloat(corte.monto_inicial) || 0;
-                                    const totalVentas = parseFloat(corte.total_ventas || 0) || 0;
-                                    const totalGastos = parseFloat(corte.total_gastos || 0) || 0;
-                                    const montoFinal = parseFloat(corte.monto_final || 0) || 0;
-                                    const diferencia = parseFloat(corte.diferencia || 0) || 0;
-                                    
-                                    const claseDif = diferencia === 0 ? 'diferencia-cero' : 
-                                                    (diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa');
+                                    const montoInicial  = parseFloat(corte.monto_inicial)     || 0;
+                                    const totalVentas   = parseFloat(corte.total_ventas  || 0) || 0;
+                                    const totalGastos   = parseFloat(corte.total_gastos  || 0) || 0;
+                                    const montoFinal    = parseFloat(corte.monto_final   || 0) || 0;
+                                    const diferencia    = parseFloat(corte.diferencia    || 0) || 0;
+                                    const claseDif      = diferencia === 0 ? 'diferencia-cero' :
+                                                          (diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa');
                                     const fechaApertura = new Date(corte.fecha_apertura).toLocaleString();
-                                    const fechaCierre = corte.fecha_cierre ? new Date(corte.fecha_cierre).toLocaleString() : 'Pendiente';
-                                    
+                                    const fechaCierre   = corte.fecha_cierre
+                                        ? new Date(corte.fecha_cierre).toLocaleString()
+                                        : 'Pendiente';
+
                                     return `
                                         <tr>
                                             <td><i class="fas fa-calendar-alt" style="color: var(--primary); margin-right: 0.3rem;"></i> ${fechaApertura}</td>
@@ -930,11 +908,9 @@ class ModuloCaja {
                                             <td style="color: var(--success);">$${totalVentas.toFixed(2)}</td>
                                             <td style="color: #e67e22;">$${totalGastos.toFixed(2)}</td>
                                             <td><strong>$${montoFinal.toFixed(2)}</strong></td>
-                                            <td class="${claseDif}">
-                                                ${diferencia > 0 ? '+' : ''}$${diferencia.toFixed(2)}
-                                            </td>
+                                            <td class="${claseDif}">${diferencia > 0 ? '+' : ''}$${diferencia.toFixed(2)}</td>
                                             <td>
-                                                <span style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.8rem; border-radius: 20px; 
+                                                <span style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.8rem; border-radius: 20px;
                                                            background: ${corte.estado === 'abierta' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(100, 116, 139, 0.1)'};
                                                            color: ${corte.estado === 'abierta' ? 'var(--success)' : 'var(--gray)'};
                                                            font-weight: 500; font-size: 0.85rem;">
@@ -943,7 +919,7 @@ class ModuloCaja {
                                                 </span>
                                             </td>
                                             <td>
-                                                <button class="btn-ver-detalle" data-id="${corte.id}" 
+                                                <button class="btn-ver-detalle" data-id="${corte.id}"
                                                         style="background: var(--primary); color: white; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; transition: all 0.3s;">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
@@ -955,20 +931,16 @@ class ModuloCaja {
                         </table>
                     </div>
                 `;
-                
+
                 this.agregarEstilosHistorial();
-                
-                const btnCerrarHistorial = container.querySelector('.btn-cerrar-historial');
-                if (btnCerrarHistorial) {
-                    btnCerrarHistorial.addEventListener('click', () => {
-                        this.toggleHistorial();
-                    });
-                }
-                
+
+                container.querySelector('.btn-cerrar-historial')?.addEventListener('click', () => {
+                    this.toggleHistorial();
+                });
+
                 container.querySelectorAll('.btn-ver-detalle').forEach(btn => {
                     btn.addEventListener('click', () => {
-                        const id = parseInt(btn.dataset.id);
-                        this.verDetalleCorte(id);
+                        this.verDetalleCorte(parseInt(btn.dataset.id));
                     });
                 });
             }
@@ -980,7 +952,7 @@ class ModuloCaja {
 
     agregarEstilosHistorial() {
         if (document.getElementById('historial-styles')) return;
-        
+
         const style = document.createElement('style');
         style.id = 'historial-styles';
         style.textContent = `
@@ -991,14 +963,12 @@ class ModuloCaja {
                 border-radius: var(--radius-lg);
                 box-shadow: var(--shadow-md);
             }
-            
             .tabla-historial {
                 width: 100%;
                 border-collapse: collapse;
                 background: white;
                 min-width: 800px;
             }
-            
             .tabla-historial th {
                 background: var(--primary);
                 color: white;
@@ -1008,33 +978,20 @@ class ModuloCaja {
                 font-size: 0.9rem;
                 white-space: nowrap;
             }
-            
             .tabla-historial td {
                 padding: 1rem;
                 border-bottom: 1px solid var(--light);
                 font-size: 0.9rem;
                 vertical-align: middle;
             }
-            
-            .tabla-historial tr:hover {
-                background: rgba(230, 126, 34, 0.05);
-            }
-            
-            .btn-ver-detalle:hover {
-                background: var(--secondary) !important;
-                transform: translateY(-2px);
-            }
-            
-            .btn-cerrar-historial:hover {
-                background: #a04545 !important;
-                transform: translateY(-2px);
-            }
-            
+            .tabla-historial tr:hover { background: rgba(230, 126, 34, 0.05); }
+            .btn-ver-detalle:hover { background: var(--secondary) !important; transform: translateY(-2px); }
+            .btn-cerrar-historial:hover { background: #a04545 !important; transform: translateY(-2px); }
             .diferencia-positiva { color: var(--success); font-weight: bold; }
             .diferencia-negativa { color: var(--danger); font-weight: bold; }
             .diferencia-cero { color: var(--gray); font-weight: bold; }
         `;
-        
+
         document.head.appendChild(style);
     }
 
@@ -1042,7 +999,7 @@ class ModuloCaja {
         try {
             const response = await this.fetchWithCsrf(this.apiUrl + '?accion=getDetalleCorte&corte_id=' + corteId);
             const data = await response.json();
-            
+
             if (data.success) {
                 this.mostrarModalDetalle(data);
             }
@@ -1054,32 +1011,32 @@ class ModuloCaja {
 
     mostrarModalDetalle(data) {
         this.cerrarModalActual();
-        
+
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.style.display = 'flex';
-        
-        const corte = data.corte;
-        const montoInicial = parseFloat(corte.monto_inicial) || 0;
-        const totalVentas = parseFloat(corte.total_ventas || 0) || 0;
-        const montoFinal = parseFloat(corte.monto_final || 0) || 0;
-        const diferencia = parseFloat(corte.diferencia || 0) || 0;
-        
-        const claseDif = diferencia === 0 ? 'diferencia-cero' : 
-                        (diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa');
-        
+
+        const corte      = data.corte;
+        const montoInicial = parseFloat(corte.monto_inicial)  || 0;
+        const totalVentas  = parseFloat(corte.total_ventas || 0) || 0;
+        const montoFinal   = parseFloat(corte.monto_final  || 0) || 0;
+        const diferencia   = parseFloat(corte.diferencia   || 0) || 0;
+
+        const claseDif = diferencia === 0 ? 'diferencia-cero' :
+                         (diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa');
+
         modal.innerHTML = `
             <div class="modal-contenido" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-file-invoice" style="color: var(--secondary);"></i> 
+                        <i class="fas fa-file-invoice" style="color: var(--secondary);"></i>
                         Detalle del Corte #${corte.id}
                     </h3>
                     <button class="cerrar-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray);">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
                     <div style="background: #f8fafc; padding: 1rem; border-radius: var(--radius-md);">
                         <div style="font-size: 0.9rem; color: var(--gray); margin-bottom: 0.3rem;">
@@ -1094,7 +1051,7 @@ class ModuloCaja {
                         <strong>${corte.fecha_cierre ? new Date(corte.fecha_cierre).toLocaleString() : 'Pendiente'}</strong>
                     </div>
                 </div>
-                
+
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
                     <div style="text-align: center; padding: 1rem; background: white; border-radius: var(--radius-md); border: 2px solid var(--light);">
                         <div style="font-size: 0.9rem; color: var(--gray);">Inicial</div>
@@ -1109,7 +1066,7 @@ class ModuloCaja {
                         <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">$${montoFinal.toFixed(2)}</div>
                     </div>
                 </div>
-                
+
                 <div style="background: #f8fafc; padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 1.2rem; font-weight: bold;">Diferencia:</span>
@@ -1122,7 +1079,7 @@ class ModuloCaja {
                         <strong>Observaciones:</strong> ${corte.observaciones || 'Sin observaciones'}
                     </div>
                 </div>
-                
+
                 <h4 style="margin: 1rem 0; color: var(--primary);">Ventas del Corte (${data.ventas.length})</h4>
                 <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--light); border-radius: var(--radius-md); margin-bottom: 1.5rem;">
                     <table style="width: 100%; border-collapse: collapse;">
@@ -1144,7 +1101,7 @@ class ModuloCaja {
                         </tbody>
                     </table>
                 </div>
-                
+
                 <h4 style="margin: 1rem 0; color: var(--primary);">Movimientos (${data.movimientos.length})</h4>
                 <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--light); border-radius: var(--radius-md);">
                     <table style="width: 100%; border-collapse: collapse;">
@@ -1172,7 +1129,7 @@ class ModuloCaja {
                         </tbody>
                     </table>
                 </div>
-                
+
                 <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
                     <button class="btn-imprimir" style="flex: 1; padding: 0.8rem; background: var(--secondary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer;">
                         <i class="fas fa-print"></i> Imprimir
@@ -1183,10 +1140,10 @@ class ModuloCaja {
                 </div>
             </div>
         `;
-        
+
         this.modalActual = modal;
         document.body.appendChild(modal);
-        
+
         modal.querySelector('.cerrar-modal')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-cerrar')?.addEventListener('click', () => this.cerrarModalActual());
         modal.querySelector('.btn-imprimir')?.addEventListener('click', () => window.print());
@@ -1211,7 +1168,7 @@ class ModuloCaja {
         document.querySelectorAll('.contenido-principal > section').forEach(s => {
             s.style.display = 'none';
         });
-        
+
         let moduloCaja = document.getElementById('moduloCaja');
         if (!moduloCaja) {
             moduloCaja = document.createElement('section');
@@ -1220,7 +1177,7 @@ class ModuloCaja {
             moduloCaja.innerHTML = '<div id="moduloCajaContent"></div>';
             document.querySelector('.contenido-principal').appendChild(moduloCaja);
         }
-        
+
         moduloCaja.style.display = 'block';
         this.historialVisible = false;
         this.actualizarUI();
@@ -1229,42 +1186,33 @@ class ModuloCaja {
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
         notificacion.className = `notificacion notificacion-${tipo}`;
-        
+
         const colores = {
             success: '#27AE60',
-            error: '#E74C3C',
+            error:   '#E74C3C',
             warning: '#F39C12'
         };
-        
+
         notificacion.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 1rem 1.5rem;
-            background: ${colores[tipo] || '#333'};
-            color: white;
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-lg);
-            z-index: 3000;
-            animation: slideInRight 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            font-weight: 500;
-            max-width: 400px;
-            min-width: 300px;
+            position: fixed; top: 20px; right: 20px;
+            padding: 1rem 1.5rem; background: ${colores[tipo] || '#333'};
+            color: white; border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg); z-index: 3000;
+            animation: slideInRight 0.3s; display: flex;
+            align-items: center; gap: 1rem; font-weight: 500;
+            max-width: 400px; min-width: 300px;
         `;
-        
+
         notificacion.innerHTML = `
             <i class="fas ${tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-exclamation-triangle'}"></i>
             <span>${mensaje}</span>
             <button style="background: none; border: none; color: white; cursor: pointer; margin-left: auto;">×</button>
         `;
-        
+
         document.body.appendChild(notificacion);
-        
+
         notificacion.querySelector('button').addEventListener('click', () => notificacion.remove());
-        
+
         setTimeout(() => {
             if (notificacion.parentNode) notificacion.remove();
         }, 3000);
