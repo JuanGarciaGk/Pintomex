@@ -27,13 +27,12 @@ if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
     ob_start('ob_gzhandler');
 }
 
-// ── Rate limiting simple basado en sesión ────────────────────────────────
 $accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
 $metodo = $_SERVER['REQUEST_METHOD'];
 
 if ($metodo === 'POST') {
-    $rateKey  = 'rate_' . ($accion ?: 'unknown');
-    $rateLimit = 60;
+    $rateKey    = 'rate_' . ($accion ?: 'unknown');
+    $rateLimit  = 60;
     $rateWindow = 60;
 
     if (!isset($_SESSION[$rateKey])) {
@@ -59,7 +58,6 @@ if (!isset($conn) || !$conn) {
     exit;
 }
 
-// ── Validar origen ────────────────────────────────────────────────────────
 $origen = $_SERVER['HTTP_REFERER'] ?? '';
 if (!empty($origen) && strpos($origen, $_SERVER['HTTP_HOST']) === false) {
     http_response_code(403);
@@ -67,7 +65,6 @@ if (!empty($origen) && strpos($origen, $_SERVER['HTTP_HOST']) === false) {
     exit;
 }
 
-// ── Acciones sin CSRF (solo lectura GET) ──────────────────────────────────
 $acciones_sin_csrf = [
     'getProductos', 'buscarProductos', 'getProductosPorCategoria',
     'buscarPorCodigo', 'getCarrito', 'getEstadoCaja',
@@ -77,7 +74,6 @@ $acciones_sin_csrf = [
     'buscarVentaPorFolio', 'obtenerDetallesVenta'
 ];
 
-// ── Validar CSRF para POST ────────────────────────────────────────────────
 if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
     $csrfToken = $_POST['csrf_token']
         ?? $_SERVER['HTTP_X_CSRF_TOKEN']
@@ -94,14 +90,13 @@ $carrito        = new Carrito();
 $caja           = new Caja();
 $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
 
-// ── Limpiar caché en escrituras ───────────────────────────────────────────
 if ($metodo === 'POST' && in_array($accion, [
-    'registrarProducto', 'actualizarProducto', 'eliminarProducto', 'cancelarVenta'
+    'registrarProducto', 'actualizarProducto', 'eliminarProducto',
+    'cancelarVenta', 'importarProductosExcel'
 ])) {
     array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
 }
 
-// ── TTL de caché por acción ───────────────────────────────────────────────
 $cache_ttl = [
     'getProductos'             => 300,
     'getProductosPorCategoria' => 300,
@@ -117,7 +112,6 @@ $cache_file = sys_get_temp_dir() . '/pos_cache_' . $cache_key . '.json';
 
 if ($metodo === 'GET' && isset($cache_ttl[$accion])) {
     if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl[$accion]) {
-        // Cabecera de caché para el cliente
         $age = time() - filemtime($cache_file);
         header('Cache-Control: public, max-age=' . ($cache_ttl[$accion] - $age));
         header('ETag: "' . md5_file($cache_file) . '"');
@@ -326,6 +320,43 @@ try {
             }
             break;
 
+        case 'importarProductosExcel':
+            if (!$productosAdmin) {
+                $response = ['success' => false, 'message' => 'Módulo no disponible'];
+                break;
+            }
+            if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
+                $response = ['success' => false, 'message' => 'No se recibió ningún archivo válido'];
+                break;
+            }
+            $archivo  = $_FILES['archivo'];
+            $maxBytes = 5 * 1024 * 1024;
+            if ($archivo['size'] > $maxBytes) {
+                $response = ['success' => false, 'message' => 'El archivo no puede superar 5MB'];
+                break;
+            }
+            $ext = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
+            if ($ext !== 'xlsx') {
+                $response = ['success' => false, 'message' => 'Solo se aceptan archivos .xlsx'];
+                break;
+            }
+            $finfo       = new finfo(FILEINFO_MIME_TYPE);
+            $mime        = $finfo->file($archivo['tmp_name']);
+            $mimeValidos = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/zip',
+                'application/octet-stream',
+            ];
+            if (!in_array($mime, $mimeValidos, true)) {
+                $response = ['success' => false, 'message' => 'Tipo de archivo no válido'];
+                break;
+            }
+            $response = $productosAdmin->importarExcel($archivo);
+            if (!empty($response['importados'])) {
+                array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
+            }
+            break;
+
         default:
             http_response_code(400);
             $response = ['success' => false, 'error' => 'Acción no válida'];
@@ -342,7 +373,6 @@ if (!is_array($response)) {
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
-// Limpieza de caché antigua (1 % de probabilidad)
 if (rand(1, 100) === 1) {
     $now = time();
     foreach (glob(sys_get_temp_dir() . '/pos_cache_*.json') as $file) {
