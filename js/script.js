@@ -63,8 +63,6 @@ class POSSystem {
         this.endMeasure('init');
     }
 
-    // ─── RENDIMIENTO ──────────────────────────────────────────────────────────
-
     startMeasure(label) {
         this.metrics[label] = performance.now();
     }
@@ -153,8 +151,6 @@ class POSSystem {
         }
     }
 
-    // ─── DISPONIBILIDAD ───────────────────────────────────────────────────────
-
     initDisponibilidad() {
         this.actualizarIndicadorOnline(navigator.onLine);
 
@@ -236,27 +232,25 @@ class POSSystem {
     }
 
     actualizarIndicadorOnline(online, estado = null) {
-        const dot = document.querySelector('.online-dot');
-        const texto = document.querySelector('.online-indicator span:last-child');
+        const dot    = document.querySelector('.online-dot');
+        const texto  = document.querySelector('.online-indicator span:last-child');
 
         if (dot && texto) {
             if (online && estado !== 'lento') {
-                dot.style.background = '#27AE60';
-                dot.style.boxShadow = '0 0 0 2px rgba(39,174,96,0.3)';
-                texto.textContent = 'En línea';
+                dot.style.background  = '#27AE60';
+                dot.style.boxShadow   = '0 0 0 2px rgba(39,174,96,0.3)';
+                texto.textContent     = 'En línea';
             } else if (online && estado === 'lento') {
-                dot.style.background = '#F39C12';
-                dot.style.boxShadow = '0 0 0 2px rgba(243,156,18,0.3)';
-                texto.textContent = 'Lento';
+                dot.style.background  = '#F39C12';
+                dot.style.boxShadow   = '0 0 0 2px rgba(243,156,18,0.3)';
+                texto.textContent     = 'Lento';
             } else {
-                dot.style.background = '#E74C3C';
-                dot.style.boxShadow = '0 0 0 2px rgba(231,76,60,0.3)';
-                texto.textContent = 'Sin conexión';
+                dot.style.background  = '#E74C3C';
+                dot.style.boxShadow   = '0 0 0 2px rgba(231,76,60,0.3)';
+                texto.textContent     = 'Sin conexión';
             }
         }
     }
-
-    // ─── SEGURIDAD ────────────────────────────────────────────────────────────
 
     async obtenerCsrfToken() {
         const tokenMeta = document.querySelector('meta[name="csrf-token"]');
@@ -265,7 +259,7 @@ class POSSystem {
         }
         try {
             const response = await this.fetchConTimeout(this.apiUrl + '?accion=getCsrfToken');
-            const data = await response.json();
+            const data     = await response.json();
             if (data.success && data.token) {
                 return data.token;
             }
@@ -280,16 +274,14 @@ class POSSystem {
         formData.append('csrf_token', csrfToken);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId  = setTimeout(() => controller.abort(), 10000);
 
         try {
             const response = await fetch(url, {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                method:  'POST',
+                body:    formData,
+                signal:  controller.signal,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             clearTimeout(timeoutId);
             return response;
@@ -318,7 +310,7 @@ class POSSystem {
     }
 
     async cachedFetch(url, options = {}, ttl = 30000) {
-        const key = url + JSON.stringify(options);
+        const key    = url + JSON.stringify(options);
         const cached = this.cache.get(key);
 
         if (cached && Date.now() - cached.timestamp < ttl) {
@@ -327,7 +319,7 @@ class POSSystem {
 
         try {
             const response = await this.fetchConTimeout(url, options);
-            const data = await response.json();
+            const data     = await response.json();
             this.cache.set(key, { data, timestamp: Date.now() });
             return data;
         } catch (error) {
@@ -335,8 +327,6 @@ class POSSystem {
             throw error;
         }
     }
-
-    // ─── ESCÁNER (SOLO en módulo Punto de Venta) ──────────────────────────────
 
     iniciarCategorias() {
         const filtrosContainer = document.getElementById('filtrosCategoria');
@@ -346,7 +336,7 @@ class POSSystem {
         if (existingButtons.length === 1) {
             this.categorias.forEach(cat => {
                 const btn = document.createElement('button');
-                btn.className = 'filtro-btn';
+                btn.className   = 'filtro-btn';
                 btn.textContent = cat;
                 btn.setAttribute('data-categoria', cat);
                 btn.setAttribute('aria-label', `Filtrar por categoría ${cat}`);
@@ -366,7 +356,7 @@ class POSSystem {
 
             if (e.target && e.target.tagName === 'INPUT' && e.target.id === 'codigoBarras') return;
 
-            const now = Date.now();
+            const now      = Date.now();
             const timeDiff = now - lastKeyTime;
 
             if (timeDiff > 100 && this.scannerBuffer.length > 0) {
@@ -401,7 +391,7 @@ class POSSystem {
         if (!codigo || this.cargando) return;
 
         const codigoSanitizado = this.sanitizarEntrada(codigo, 50);
-        const inputBusqueda = document.getElementById('codigoBarras');
+        const inputBusqueda    = document.getElementById('codigoBarras');
         if (inputBusqueda) inputBusqueda.value = codigoSanitizado;
 
         this.startMeasure('escanner_' + codigoSanitizado);
@@ -459,8 +449,6 @@ class POSSystem {
             }, 1500);
         }, 10);
     }
-
-    // ─── ATAJOS DE TECLADO ────────────────────────────────────────────────────
 
     configurarAtajosTeclado() {
         document.addEventListener('keydown', (e) => {
@@ -525,10 +513,8 @@ class POSSystem {
         `;
 
         document.body.appendChild(modal);
-        modal.querySelector('.btn-cerrar-atajos').addEventListener('click', () => modal.remove());
+        modal.querySelector('.btn-cerrar-atajos')?.addEventListener('click', () => modal.remove());
     }
-
-    // ─── ACTUALIZACIÓN AUTOMÁTICA ─────────────────────────────────────────────
 
     iniciarActualizacionAutomatica() {
         setInterval(() => {
@@ -538,8 +524,6 @@ class POSSystem {
             }
         }, 30000);
     }
-
-    // ─── CAJA ─────────────────────────────────────────────────────────────────
 
     async verificarCajaAntesDeVender() {
         if (this.verificandoCaja) return false;
@@ -565,13 +549,11 @@ class POSSystem {
         }
     }
 
-    // ─── CARRITO (ocultar/mostrar) ────────────────────────────────────────────
-
     _mostrarCarrito() {
         const carritoPanel = document.querySelector('.carrito-panel');
-        const sistemaPos = document.getElementById('sistemaPos');
+        const sistemaPos   = document.getElementById('sistemaPos');
         if (carritoPanel) {
-            carritoPanel.style.display = '';
+            carritoPanel.style.display    = '';
             carritoPanel.style.visibility = '';
         }
         if (sistemaPos) sistemaPos.classList.remove('carrito-oculto');
@@ -581,7 +563,7 @@ class POSSystem {
 
     _ocultarCarrito() {
         const carritoPanel = document.querySelector('.carrito-panel');
-        const sistemaPos = document.getElementById('sistemaPos');
+        const sistemaPos   = document.getElementById('sistemaPos');
         if (carritoPanel) {
             carritoPanel.classList.remove('visible');
             carritoPanel.style.display = 'none';
@@ -590,8 +572,6 @@ class POSSystem {
         const toggleCarrito = document.querySelector('.toggle-carrito-mobile');
         if (toggleCarrito) toggleCarrito.style.display = 'none';
     }
-
-    // ─── MÓDULOS ──────────────────────────────────────────────────────────────
 
     initModulos() {
         document.querySelectorAll('.menu-item').forEach(item => {
@@ -630,8 +610,6 @@ class POSSystem {
         });
     }
 
-    // ─── BD ───────────────────────────────────────────────────────────────────
-
     async verificarConexionBD() {
         this.startMeasure('verificarConexionBD');
         try {
@@ -652,9 +630,9 @@ class POSSystem {
         this.mostrarCargando(true);
 
         try {
-            const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+            const url      = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
             const response = await this.fetchConTimeout(url, {}, 3000);
-            const data = await response.json();
+            const data     = await response.json();
 
             this.productos = data;
 
@@ -674,9 +652,9 @@ class POSSystem {
 
     async recargarProductos() {
         try {
-            const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+            const url      = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
             const response = await this.fetchConTimeout(url, {}, 3000);
-            const data = await response.json();
+            const data     = await response.json();
 
             this.productos = data;
             const categoriaActivaActual = this.categoriaActiva;
@@ -735,8 +713,6 @@ class POSSystem {
         }
     }
 
-    // ─── CARRITO ──────────────────────────────────────────────────────────────
-
     async agregarAlCarrito(productoId, cantidad = 1) {
         const cajaAbierta = await this.verificarCajaAntesDeVender();
         if (!cajaAbierta) return;
@@ -747,7 +723,7 @@ class POSSystem {
         this.startMeasure('agregarAlCarrito');
 
         try {
-            const idValido = this.validarEnteroPositivo(productoId);
+            const idValido       = this.validarEnteroPositivo(productoId);
             const cantidadValida = this.validarEnteroPositivo(cantidad) || 1;
 
             if (!idValido) {
@@ -761,7 +737,7 @@ class POSSystem {
             formData.append('cantidad', cantidadValida);
 
             const response = await this.postWithCsrf(this.apiUrl, formData);
-            const data = await response.json();
+            const data     = await response.json();
 
             if (data.success) {
                 this.carrito = data.carrito.items;
@@ -814,11 +790,11 @@ class POSSystem {
             const fragment = document.createDocumentFragment();
 
             productos.slice(0, 8).forEach(producto => {
-                const item = document.createElement('div');
-                item.className = 'sugerencia-item';
-                item.dataset.id = producto.id;
-                item.tabIndex = 0;
-                item.role = 'option';
+                const item       = document.createElement('div');
+                item.className   = 'sugerencia-item';
+                item.dataset.id  = producto.id;
+                item.tabIndex    = 0;
+                item.role        = 'option';
                 item.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio).toFixed(2)}`);
 
                 item.innerHTML = `
@@ -858,7 +834,7 @@ class POSSystem {
 
     escapeHTML(text) {
         if (!text) return '';
-        const div = document.createElement('div');
+        const div       = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
@@ -866,8 +842,8 @@ class POSSystem {
     async actualizarCarrito() {
         try {
             const response = await this.fetchConTimeout(this.apiUrl + '?accion=getCarrito');
-            const data = await response.json();
-            this.carrito = data.items;
+            const data     = await response.json();
+            this.carrito   = data.items;
             this.renderizarCarrito(data);
         } catch (error) {
             console.error('Error actualizando carrito:', error);
@@ -885,7 +861,7 @@ class POSSystem {
             formData.append('cantidad', cantidad);
 
             const response = await this.postWithCsrf(this.apiUrl, formData);
-            const data = await response.json();
+            const data     = await response.json();
 
             if (data.success === false && data.message?.includes('Stock insuficiente')) {
                 this.mostrarNotificacion(`❌ ${data.message}`, 'error');
@@ -915,8 +891,8 @@ class POSSystem {
             formData.append('producto_id', productoId);
 
             const response = await this.postWithCsrf(this.apiUrl, formData);
-            const data = await response.json();
-            this.carrito = data.items;
+            const data     = await response.json();
+            this.carrito   = data.items;
             this.renderizarCarrito(data);
             this.mostrarNotificacion('Producto eliminado', 'success');
         } catch (error) {
@@ -937,8 +913,8 @@ class POSSystem {
             formData.append('accion', 'vaciarCarrito');
 
             const response = await this.postWithCsrf(this.apiUrl, formData);
-            const data = await response.json();
-            this.carrito = data.items;
+            const data     = await response.json();
+            this.carrito   = data.items;
             this.renderizarCarrito(data);
             this.mostrarNotificacion('Carrito vaciado', 'success');
         } catch (error) {
@@ -982,25 +958,25 @@ class POSSystem {
         const fragment = document.createDocumentFragment();
 
         productos.forEach(producto => {
-            const card = document.createElement('div');
-            card.className = 'producto-card';
+            const card      = document.createElement('div');
+            card.className  = 'producto-card';
             card.dataset.id = producto.id;
-            card.tabIndex = 0;
-            card.role = 'button';
+            card.tabIndex   = 0;
+            card.role       = 'button';
             card.setAttribute('aria-label', `${producto.nombre} - $${parseFloat(producto.precio).toFixed(2)} - Stock: ${producto.stock_actual}`);
 
             let stockClass = 'stock';
-            let stockText = `${producto.stock_actual} disponibles`;
+            let stockText  = `${producto.stock_actual} disponibles`;
 
             if (producto.stock_actual <= 0) {
                 stockClass += ' stock-agotado';
-                stockText = '❌ AGOTADO';
+                stockText   = '❌ AGOTADO';
                 card.style.opacity = '0.5';
-                card.style.cursor = 'not-allowed';
+                card.style.cursor  = 'not-allowed';
                 card.setAttribute('aria-disabled', 'true');
             } else if (producto.stock_actual <= producto.stock_minimo) {
                 stockClass += ' stock-bajo';
-                stockText = `⚠️ Quedan ${producto.stock_actual}`;
+                stockText   = `⚠️ Quedan ${producto.stock_actual}`;
             }
 
             card.innerHTML = `
@@ -1050,7 +1026,7 @@ class POSSystem {
         if (!container) return;
 
         const subtotal = parseFloat(data.subtotal) || 0;
-        const total = parseFloat(data.total) || 0;
+        const total    = parseFloat(data.total)    || 0;
 
         if (!data.items || data.items.length === 0) {
             container.innerHTML = `
@@ -1064,8 +1040,10 @@ class POSSystem {
             const btnVaciar = document.querySelector('.btn-vaciar-carrito');
             if (btnVaciar) btnVaciar.style.display = 'none';
 
-            document.getElementById('subtotal').textContent = '$0.00';
-            document.getElementById('total').textContent = '$0.00';
+            const subtotalEl = document.getElementById('subtotal');
+            const totalEl    = document.getElementById('total');
+            if (subtotalEl) subtotalEl.textContent = '$0.00';
+            if (totalEl)    totalEl.textContent    = '$0.00';
 
             const btnProcesar = document.getElementById('btnProcesar');
             if (btnProcesar) {
@@ -1079,7 +1057,7 @@ class POSSystem {
         const fragment = document.createDocumentFragment();
 
         data.items.forEach(item => {
-            const itemDiv = document.createElement('div');
+            const itemDiv     = document.createElement('div');
             itemDiv.className = 'carrito-item';
             itemDiv.setAttribute('aria-label', `${item.nombre} - ${item.cantidad} unidades - $${parseFloat(item.subtotal).toFixed(2)}`);
 
@@ -1111,8 +1089,10 @@ class POSSystem {
         container.innerHTML = '';
         container.appendChild(fragment);
 
-        document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
-        document.getElementById('total').textContent = `$${total.toFixed(2)}`;
+        const subtotalEl = document.getElementById('subtotal');
+        const totalEl    = document.getElementById('total');
+        if (subtotalEl) subtotalEl.textContent = `$${subtotal.toFixed(2)}`;
+        if (totalEl)    totalEl.textContent    = `$${total.toFixed(2)}`;
 
         const btnProcesar = document.getElementById('btnProcesar');
         if (btnProcesar) {
@@ -1141,14 +1121,12 @@ class POSSystem {
 
         container.querySelectorAll('.cantidad-input').forEach(input => {
             input.addEventListener('change', () => {
-                const id = parseInt(input.dataset.id);
+                const id       = parseInt(input.dataset.id);
                 const cantidad = parseInt(input.value) || 1;
                 this.modificarCantidad(id, cantidad);
             });
         });
     }
-
-    // ─── PROCESAR VENTA ───────────────────────────────────────────────────────
 
     async procesarVenta() {
         const cajaAbierta = await this.verificarCajaAntesDeVender();
@@ -1168,31 +1146,37 @@ class POSSystem {
 
         if (this.metodoPagoActivo === 'Efectivo') {
             const efectivoInput = document.getElementById('efectivoRecibido');
-            const efectivo = parseFloat(efectivoInput?.value);
-            const total = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
+            const efectivo      = parseFloat(efectivoInput?.value);
+            const total         = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
 
             if (!efectivoInput?.value || efectivoInput.value.trim() === '') {
                 this.mostrarNotificacion('⚠️ Ingrese la cantidad de efectivo recibido', 'warning');
-                efectivoInput.focus();
-                efectivoInput.style.borderColor = 'var(--danger)';
-                setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
+                efectivoInput?.focus();
+                if (efectivoInput) {
+                    efectivoInput.style.borderColor = 'var(--danger)';
+                    setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
+                }
                 return;
             }
 
             if (isNaN(efectivo) || efectivo <= 0) {
                 this.mostrarNotificacion('❌ La cantidad de efectivo no es válida', 'error');
-                efectivoInput.focus();
-                efectivoInput.style.borderColor = 'var(--danger)';
-                efectivoInput.value = '';
-                setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
+                if (efectivoInput) {
+                    efectivoInput.focus();
+                    efectivoInput.style.borderColor = 'var(--danger)';
+                    efectivoInput.value = '';
+                    setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
+                }
                 return;
             }
 
             if (efectivo < total) {
                 this.mostrarNotificacion(`❌ Efectivo insuficiente. Faltan: $${(total - efectivo).toFixed(2)}`, 'error');
-                efectivoInput.focus();
-                efectivoInput.style.borderColor = 'var(--danger)';
-                setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
+                if (efectivoInput) {
+                    efectivoInput.focus();
+                    efectivoInput.style.borderColor = 'var(--danger)';
+                    setTimeout(() => { efectivoInput.style.borderColor = 'var(--light)'; }, 2000);
+                }
                 return;
             }
         }
@@ -1201,35 +1185,35 @@ class POSSystem {
 
         try {
             const subtotal = this.carrito.reduce((sum, item) => sum + item.subtotal, 0);
-            const total = subtotal;
+            const total    = subtotal;
 
             let efectivoRecibido = null;
-            let cambio = null;
+            let cambio           = null;
 
             if (this.metodoPagoActivo === 'Efectivo') {
                 efectivoRecibido = parseFloat(document.getElementById('efectivoRecibido')?.value);
-                cambio = efectivoRecibido - total;
+                cambio           = efectivoRecibido - total;
             }
 
             const formData = new FormData();
             formData.append('accion', 'procesarVenta');
             formData.append('metodo_pago', this.metodoPagoActivo);
             if (efectivoRecibido !== null) formData.append('efectivo_recibido', efectivoRecibido);
-            if (cambio !== null) formData.append('cambio', cambio);
+            if (cambio !== null)           formData.append('cambio', cambio);
 
             const response = await this.postWithCsrf(this.apiUrl, formData);
-            const data = await response.json();
+            const data     = await response.json();
 
             if (data.success) {
                 const venta = {
-                    folio: data.folio,
-                    fecha: new Date().toLocaleString(),
-                    items: [...this.carrito],
-                    subtotal: parseFloat(total),
-                    total: parseFloat(total),
-                    metodo_pago: this.metodoPagoActivo,
+                    folio:             data.folio,
+                    fecha:             new Date().toLocaleString(),
+                    items:             [...this.carrito],
+                    subtotal:          parseFloat(total),
+                    total:             parseFloat(total),
+                    metodo_pago:       this.metodoPagoActivo,
                     efectivo_recibido: efectivoRecibido ? parseFloat(efectivoRecibido) : null,
-                    cambio: cambio ? parseFloat(cambio) : null
+                    cambio:            cambio           ? parseFloat(cambio)           : null
                 };
 
                 if (window.ticketPrinter) {
@@ -1274,8 +1258,10 @@ class POSSystem {
                 const cambioSpan = document.getElementById('cambio');
                 if (cambioSpan) { cambioSpan.textContent = '$0.00'; cambioSpan.style.color = 'var(--gray)'; }
 
-                document.getElementById('subtotal').textContent = '$0.00';
-                document.getElementById('total').textContent = '$0.00';
+                const subtotalEl = document.getElementById('subtotal');
+                const totalEl    = document.getElementById('total');
+                if (subtotalEl) subtotalEl.textContent = '$0.00';
+                if (totalEl)    totalEl.textContent    = '$0.00';
 
                 const btnProcesar = document.getElementById('btnProcesar');
                 if (btnProcesar) { btnProcesar.disabled = true; btnProcesar.setAttribute('aria-disabled', 'true'); }
@@ -1305,15 +1291,13 @@ class POSSystem {
         }
     }
 
-    // ─── EVENTOS ──────────────────────────────────────────────────────────────
-
     cargarEventos() {
         const inputCodigo = document.getElementById('codigoBarras');
         if (inputCodigo) {
             inputCodigo.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    const sugerencias = document.getElementById('sugerencias');
-                    const activeItem = sugerencias?.querySelector('.sugerencia-item.active');
+                    const sugerencias  = document.getElementById('sugerencias');
+                    const activeItem   = sugerencias?.querySelector('.sugerencia-item.active');
 
                     if (activeItem) {
                         if (activeItem.dataset.id) this.agregarAlCarrito(parseInt(activeItem.dataset.id));
@@ -1364,7 +1348,7 @@ class POSSystem {
 
         const efectivoInput = document.getElementById('efectivoRecibido');
         if (efectivoInput) {
-            efectivoInput.addEventListener('input', () => this.calcularCambio());
+            efectivoInput.addEventListener('input',   () => this.calcularCambio());
             efectivoInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') this.procesarVenta();
             });
@@ -1417,8 +1401,6 @@ class POSSystem {
         }
     }
 
-    // ─── RESPONSIVE ───────────────────────────────────────────────────────────
-
     initResponsive() {
         document.querySelectorAll('.toggle-carrito-mobile, .toggle-menu-mobile').forEach(el => el.remove());
 
@@ -1429,7 +1411,7 @@ class POSSystem {
         document.body.appendChild(toggleCarrito);
 
         toggleCarrito.addEventListener('click', () => {
-            document.querySelector('.carrito-panel').classList.add('visible');
+            document.querySelector('.carrito-panel')?.classList.add('visible');
         });
 
         const toggleMenu = document.createElement('button');
@@ -1439,12 +1421,12 @@ class POSSystem {
         document.body.appendChild(toggleMenu);
 
         toggleMenu.addEventListener('click', () => {
-            document.querySelector('.sidebar').classList.toggle('mobile-visible');
+            document.querySelector('.sidebar')?.classList.toggle('mobile-visible');
         });
 
         document.addEventListener('click', (e) => {
             const carrito = document.querySelector('.carrito-panel');
-            const toggle = document.querySelector('.toggle-carrito-mobile');
+            const toggle  = document.querySelector('.toggle-carrito-mobile');
 
             if (carrito?.classList.contains('visible')) {
                 if (!carrito.contains(e.target) && toggle && !toggle.contains(e.target)) {
@@ -1456,13 +1438,11 @@ class POSSystem {
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', () => {
                 if (window.innerWidth <= 992) {
-                    document.querySelector('.sidebar').classList.remove('mobile-visible');
+                    document.querySelector('.sidebar')?.classList.remove('mobile-visible');
                 }
             });
         });
     }
-
-    // ─── RIPPLE EFFECT ─────────────────────────���──────────────────────────────
 
     agregarRippleEffect() {
         document.querySelectorAll('.metodo-pago-btn, .filtro-btn, .btn-procesar').forEach(button => {
@@ -1477,41 +1457,42 @@ class POSSystem {
                     ripple = document.createElement('span');
                     ripple.className = 'ripple-effect';
                     Object.assign(ripple.style, {
-                        position: 'absolute', borderRadius: '50%',
+                        position:        'absolute',
+                        borderRadius:    '50%',
                         backgroundColor: 'rgba(255,255,255,0.6)',
-                        transform: 'scale(0)', opacity: '1',
-                        pointerEvents: 'none',
-                        transition: 'transform 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.5s linear'
+                        transform:       'scale(0)',
+                        opacity:         '1',
+                        pointerEvents:   'none',
+                        transition:      'transform 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.5s linear'
                     });
                     this.appendChild(ripple);
                 }
 
                 const rect = this.getBoundingClientRect();
                 const size = Math.max(rect.width, rect.height);
-                const x = e.clientX - rect.left - size / 2;
-                const y = e.clientY - rect.top - size / 2;
+                const x    = e.clientX - rect.left - size / 2;
+                const y    = e.clientY - rect.top  - size / 2;
 
-                ripple.style.width = ripple.style.height = size + 'px';
-                ripple.style.left = x + 'px';
-                ripple.style.top = y + 'px';
+                ripple.style.width  = ripple.style.height = size + 'px';
+                ripple.style.left   = x + 'px';
+                ripple.style.top    = y + 'px';
                 ripple.offsetHeight;
                 ripple.style.transform = 'scale(4)';
-                ripple.style.opacity = '0';
+                ripple.style.opacity   = '0';
 
                 setTimeout(() => {
                     if (ripple?.parentNode) {
                         ripple.style.transform = 'scale(0)';
-                        ripple.style.opacity = '1';
+                        ripple.style.opacity   = '1';
                     }
                 }, 500);
             });
         });
     }
 
-    // ─── BUSCADOR PREDICTIVO ──────────────────────────────────────────────────
 
     iniciarBuscadorPredictivo() {
-        const inputBusqueda = document.getElementById('codigoBarras');
+        const inputBusqueda  = document.getElementById('codigoBarras');
         const sugerenciasDiv = document.getElementById('sugerencias');
 
         if (!inputBusqueda || !sugerenciasDiv) return;
@@ -1537,7 +1518,7 @@ class POSSystem {
         });
 
         inputBusqueda.addEventListener('keydown', (e) => {
-            const items = sugerenciasDiv.querySelectorAll('.sugerencia-item');
+            const items      = sugerenciasDiv.querySelectorAll('.sugerencia-item');
             if (items.length === 0) return;
 
             const activeItem = sugerenciasDiv.querySelector('.sugerencia-item.active');
@@ -1572,22 +1553,22 @@ class POSSystem {
         });
     }
 
-    // ─── CÁLCULO DE CAMBIO ────────────────────────────────────────────────────
 
     calcularCambio() {
         const efectivoInput = document.getElementById('efectivoRecibido');
-        const cambioEl = document.getElementById('cambio');
+        const cambioEl      = document.getElementById('cambio');
         if (!efectivoInput || !cambioEl) return;
 
         if (!efectivoInput.value) {
-            cambioEl.textContent = '$0.00';
-            cambioEl.style.color = 'var(--gray)';
+            cambioEl.textContent  = '$0.00';
+            cambioEl.style.color  = 'var(--gray)';
             return;
         }
 
         const efectivo = parseFloat(efectivoInput.value) || 0;
-        const total = parseFloat(document.getElementById('total')?.textContent.replace('$', '')) || 0;
-        const cambio = efectivo - total;
+        const totalEl  = document.getElementById('total');
+        const total    = parseFloat(totalEl?.textContent.replace('$', '')) || 0;
+        const cambio   = efectivo - total;
 
         cambioEl.textContent = `$${cambio.toFixed(2)}`;
         if (efectivo <= 0) {
@@ -1599,10 +1580,8 @@ class POSSystem {
         }
     }
 
-    // ─── TICKET ───────────────────────────────────────────────────────────────
-
     mostrarTicket(venta) {
-        const modal = document.getElementById('modalTicket');
+        const modal     = document.getElementById('modalTicket');
         const contenido = document.getElementById('ticketContenido');
         if (!modal || !contenido) return;
 
@@ -1647,12 +1626,10 @@ class POSSystem {
         modal.style.display = 'flex';
     }
 
-    // ─── NOTIFICACIONES ───────────────────────────────────────────────────────
-
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
         const colores = { success: '#27AE60', error: '#E74C3C', warning: '#F39C12' };
-        const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
+        const iconos  = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
 
         notificacion.style.cssText = `
             position: fixed; top: 20px; right: 20px;
@@ -1671,7 +1648,9 @@ class POSSystem {
         `;
 
         document.body.appendChild(notificacion);
-        notificacion.querySelector('button').addEventListener('click', () => notificacion.remove());
+
+        notificacion.querySelector('button')?.addEventListener('click', () => notificacion.remove());
+
         setTimeout(() => { if (notificacion.parentNode) notificacion.remove(); }, 4000);
     }
 }

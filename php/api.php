@@ -7,7 +7,7 @@ register_shutdown_function(function () {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
         if (ob_get_length()) ob_clean();
-        header('Content-Type: application/json');
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['success' => false, 'message' => 'Error interno del servidor']);
         exit;
     }
@@ -22,6 +22,7 @@ require_once 'productos_admin.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('X-Content-Type-Options: nosniff');
+header('X-Requested-With: XMLHttpRequest');
 
 if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
     ob_start('ob_gzhandler');

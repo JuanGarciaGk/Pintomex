@@ -21,27 +21,21 @@ class TicketPrinter {
 
     async printTicket(venta, autoPrint = true) {
         const ticketHtml = this.generateTicketHTML(venta);
-
         if (autoPrint) {
             this.printThermalSilent(ticketHtml);
         }
-
         return ticketHtml;
     }
 
     formatearFecha(valor) {
         if (typeof valor === 'string') {
             const d = new Date(valor);
-            if (isNaN(d.getTime())) {
-                return valor;
-            }
+            if (isNaN(d.getTime())) return valor;
             return `${d.toLocaleDateString('es-MX')} ${d.toLocaleTimeString('es-MX')}`;
         }
-
         if (valor instanceof Date && !isNaN(valor.getTime())) {
             return `${valor.toLocaleDateString('es-MX')} ${valor.toLocaleTimeString('es-MX')}`;
         }
-
         const ahora = new Date();
         return `${ahora.toLocaleDateString('es-MX')} ${ahora.toLocaleTimeString('es-MX')}`;
     }
@@ -54,7 +48,6 @@ class TicketPrinter {
             const subtotal = parseFloat(item.subtotal) || 0;
             const cantidad = parseInt(item.cantidad)   || 0;
             const nombre   = item.nombre               || '';
-
             return `
                 <div class="ticket-line">
                     <span class="item-name">${this.truncate(nombre, 28)}</span>
@@ -108,9 +101,7 @@ class TicketPrinter {
                         padding: 2mm;
                         background: white;
                     }
-                    .ticket {
-                        width: 100%;
-                    }
+                    .ticket { width: 100%; }
                     .header {
                         text-align: center;
                         border-bottom: 1px dashed #000;
@@ -124,6 +115,16 @@ class TicketPrinter {
                     .header p {
                         font-size: 10px;
                         margin: 2px 0;
+                    }
+                    .header .rfc {
+                        font-size: 11px;
+                        font-weight: bold;
+                        margin: 4px 0 2px;
+                    }
+                    .header .direccion {
+                        font-size: 10px;
+                        line-height: 1.4;
+                        margin-bottom: 4px;
                     }
                     .info {
                         margin: 8px 0;
@@ -174,8 +175,6 @@ class TicketPrinter {
                         margin: 3px 0;
                         font-weight: bold;
                     }
-
-                    /* ── Garantía ── */
                     .garantia {
                         margin-top: 10px;
                         padding: 6px 4px;
@@ -200,7 +199,6 @@ class TicketPrinter {
                         content: "• ";
                         font-weight: bold;
                     }
-
                     .footer {
                         text-align: center;
                         margin-top: 10px;
@@ -218,14 +216,17 @@ class TicketPrinter {
             <body>
                 <div class="ticket">
 
-                    <!-- Encabezado -->
                     <div class="header">
                         <h1>🏪 PINTUMEX</h1>
-                        <p>Punto de Venta</p>
+                        <p class="rfc">RFC: RAZD961230NS9</p>
+                        <p class="direccion">
+                            Calle Negrete Poniente 210<br>
+                            Barrio del Centro<br>
+                            75200 Tepeaca, Puebla
+                        </p>
                         <p>${fechaFormateada}</p>
                     </div>
 
-                    <!-- Información de la venta -->
                     <div class="info">
                         <div class="info-line">
                             <span>FOLIO:</span>
@@ -237,7 +238,6 @@ class TicketPrinter {
                         </div>
                     </div>
 
-                    <!-- Productos -->
                     <div class="items">
                         <div class="ticket-line" style="border-bottom: 1px dotted #000; margin-bottom: 3px;">
                             <span class="item-name">PRODUCTO</span>
@@ -248,7 +248,6 @@ class TicketPrinter {
                         ${itemsHTML}
                     </div>
 
-                    <!-- Totales -->
                     <div class="totales">
                         <div class="ticket-line">
                             <span>SUBTOTAL:</span>
@@ -265,7 +264,6 @@ class TicketPrinter {
                         </div>
                     </div>
 
-                    <!-- ── Sección de Garantía ── -->
                     <div class="garantia">
                         <div class="garantia-title">★ POLÍTICA DE CAMBIOS ★</div>
                         <div class="garantia-item">
@@ -282,7 +280,6 @@ class TicketPrinter {
                         </div>
                     </div>
 
-                    <!-- Pie de página -->
                     <div class="footer">
                         <hr>
                         <p>¡Gracias por su compra!</p>
@@ -302,28 +299,22 @@ class TicketPrinter {
             if (!this.printIframe) {
                 this.initHiddenIframe();
             }
-
             const iframeDoc = this.printIframe.contentWindow.document;
             iframeDoc.open();
             iframeDoc.write(ticketHtml);
             iframeDoc.close();
-
             setTimeout(() => {
                 try {
                     this.printIframe.contentWindow.focus();
                     this.printIframe.contentWindow.print();
-
                     setTimeout(() => {
-                        if (iframeDoc.body) {
-                            iframeDoc.body.innerHTML = '';
-                        }
+                        if (iframeDoc.body) iframeDoc.body.innerHTML = '';
                     }, 500);
                 } catch (printError) {
                     console.error('Error al imprimir:', printError);
                     this.printFallback(ticketHtml);
                 }
             }, 100);
-
         } catch (error) {
             console.error('Error en impresión silenciosa:', error);
             this.printFallback(ticketHtml);
@@ -338,17 +329,13 @@ class TicketPrinter {
         iframe.style.border     = 'none';
         iframe.style.visibility = 'hidden';
         document.body.appendChild(iframe);
-
         const iframeDoc = iframe.contentWindow.document;
         iframeDoc.open();
         iframeDoc.write(ticketHtml);
         iframeDoc.close();
-
         setTimeout(() => {
             iframe.contentWindow.print();
-            setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
+            setTimeout(() => document.body.removeChild(iframe), 1000);
         }, 100);
     }
 
