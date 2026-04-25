@@ -11,6 +11,7 @@ class ModuloProductos {
         this.cargando = false;
         this.buscarTimeout = null;
         this.tabActiva = 'productos';
+        this.filtroStock = null;
     }
 
     async init() {
@@ -85,6 +86,7 @@ class ModuloProductos {
         const categoria = categoriaSelect ? categoriaSelect.value : 'Todas';
         this.terminoBusqueda = termino;
         this.categoriaFiltro = categoria;
+        this.filtroStock = null;
         try {
             let url = `${this.apiUrl}?accion=buscarProductosAdmin&_t=${Date.now()}`;
             if (termino)                            url += `&termino=${encodeURIComponent(termino)}`;
@@ -93,6 +95,7 @@ class ModuloProductos {
             const data = await response.json();
             if (data.success) {
                 this.productos = data.productos;
+                this.renderizarEstadisticas();
                 this.renderizarTabla();
             }
         } catch (error) {
@@ -101,10 +104,35 @@ class ModuloProductos {
         }
     }
 
+    aplicarFiltroStock(tipo) {
+        this.filtroStock = (this.filtroStock === tipo) ? null : tipo;
+        this.renderizarEstadisticas();
+
+        let lista = this.productos;
+
+        const categoriaSelect = document.getElementById('categoriaFiltro');
+        const categoria = categoriaSelect ? categoriaSelect.value : 'Todas';
+        if (categoria && categoria !== 'Todas') {
+            lista = lista.filter(p => p.categoria === categoria);
+        }
+
+        if (this.filtroStock === 'sin_stock') {
+            lista = lista.filter(p => parseInt(p.stock_actual) <= 0);
+        } else if (this.filtroStock === 'bajo') {
+            lista = lista.filter(p => parseInt(p.stock_actual) > 0 && parseInt(p.stock_actual) <= parseInt(p.stock_minimo));
+        }
+
+        this.renderizarTabla(lista);
+    }
+
     renderizarEstadisticas() {
         if (!this.estadisticas) return;
         const container = document.getElementById('productosStats');
         if (!container) return;
+
+        const activoBajo     = this.filtroStock === 'bajo';
+        const activoSinStock = this.filtroStock === 'sin_stock';
+
         container.innerHTML = `
             <div class="stats-grid">
                 <div class="stat-card">
@@ -114,42 +142,76 @@ class ModuloProductos {
                         <span class="stat-label">Total Productos</span>
                     </div>
                 </div>
-                <div class="stat-card ${this.estadisticas.stock_bajo > 0 ? 'warning' : ''}">
+                <div class="stat-card clickable ${this.estadisticas.stock_bajo > 0 ? 'warning' : ''} ${activoBajo ? 'filtro-activo filtro-warning' : ''}"
+                     id="statStockBajo"
+                     title="${activoBajo ? 'Quitar filtro de stock bajo' : 'Filtrar por stock bajo'}">
                     <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="stat-info">
                         <span class="stat-value">${this.estadisticas.stock_bajo}</span>
-                        <span class="stat-label">Stock Bajo</span>
+                        <span class="stat-label">Stock Bajo${activoBajo ? ' ✓' : ''}</span>
                     </div>
                 </div>
-                <div class="stat-card ${this.estadisticas.sin_stock > 0 ? 'danger' : ''}">
+                <div class="stat-card clickable ${this.estadisticas.sin_stock > 0 ? 'danger' : ''} ${activoSinStock ? 'filtro-activo filtro-danger' : ''}"
+                     id="statSinStock"
+                     title="${activoSinStock ? 'Quitar filtro sin stock' : 'Filtrar por sin stock'}">
                     <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
                     <div class="stat-info">
                         <span class="stat-value">${this.estadisticas.sin_stock}</span>
-                        <span class="stat-label">Sin Stock</span>
+                        <span class="stat-label">Sin Stock${activoSinStock ? ' ✓' : ''}</span>
                     </div>
                 </div>
             </div>`;
+
+        container.querySelector('#statStockBajo')?.addEventListener('click', () => this.aplicarFiltroStock('bajo'));
+        container.querySelector('#statSinStock')?.addEventListener('click',  () => this.aplicarFiltroStock('sin_stock'));
     }
 
-    renderizarTabla() {
+    renderizarTabla(lista = null) {
         const container = document.getElementById('productosTableBody');
         if (!container) return;
-        if (this.productos.length === 0) {
+
+        const productos = lista !== null ? lista : this.productos;
+
+        const tableContainer = container.closest('.productos-tabla-container');
+        const bannerExistente = tableContainer?.querySelector('.filtro-stock-banner');
+        if (bannerExistente) bannerExistente.remove();
+
+        if (this.filtroStock && tableContainer) {
+            const banner = document.createElement('div');
+            banner.className = `filtro-stock-banner filtro-stock-banner--${this.filtroStock === 'bajo' ? 'warning' : 'danger'}`;
+
+            const etiqueta = this.filtroStock === 'bajo' ? 'stock bajo' : 'sin stock';
+            banner.innerHTML = `
+                <i class="fas fa-filter"></i>
+                Mostrando <strong>${productos.length}</strong> producto(s) con ${etiqueta}
+                &nbsp;—&nbsp;
+                <button class="btn-quitar-filtro-stock">Quitar filtro</button>`;
+            tableContainer.insertBefore(banner, tableContainer.firstChild);
+            banner.querySelector('.btn-quitar-filtro-stock').addEventListener('click', () => this.aplicarFiltroStock(this.filtroStock));
+        }
+
+        if (productos.length === 0) {
+            const msgFiltro = this.filtroStock
+                ? `No hay productos con ${this.filtroStock === 'bajo' ? 'stock bajo' : 'sin stock'}.`
+                : 'No hay productos registrados';
             container.innerHTML = `
                 <tr>
                     <td colspan="6" style="text-align:center;padding:3rem;">
                         <i class="fas fa-box-open" style="font-size:3rem;color:var(--gray);opacity:.5;"></i>
-                        <p style="margin-top:1rem;">No hay productos registrados</p>
-                        <button class="btn-agregar-producto" style="margin-top:1rem;background:var(--secondary);color:white;border:none;padding:.5rem 1rem;border-radius:var(--radius-md);cursor:pointer;">
+                        <p style="margin-top:1rem;">${msgFiltro}</p>
+                        ${!this.filtroStock ? `<button class="btn-agregar-producto" style="margin-top:1rem;background:var(--secondary);color:white;border:none;padding:.5rem 1rem;border-radius:var(--radius-md);cursor:pointer;">
                             <i class="fas fa-plus"></i> Agregar Producto
-                        </button>
+                        </button>` : ''}
                     </td>
                 </tr>`;
-            container.querySelector('.btn-agregar-producto')?.addEventListener('click', () => this.mostrarModalFormulario());
+            if (!this.filtroStock) {
+                container.querySelector('.btn-agregar-producto')?.addEventListener('click', () => this.mostrarModalFormulario());
+            }
             return;
         }
+
         let html = '';
-        for (const p of this.productos) {
+        for (const p of productos) {
             const stockClass = p.stock_actual <= 0 ? 'stock-critico' : p.stock_actual <= p.stock_minimo ? 'stock-bajo' : 'stock-normal';
             html += `
                 <tr data-id="${p.id}">
@@ -175,6 +237,7 @@ class ModuloProductos {
                 </tr>`;
         }
         container.innerHTML = html;
+
         container.querySelectorAll('.btn-editar').forEach(btn => {
             btn.addEventListener('click', e => { e.stopPropagation(); this.editarProducto(parseInt(btn.dataset.id)); });
             btn.addEventListener('mouseenter', e => e.currentTarget.style.transform = 'scale(1.1)');
@@ -296,6 +359,7 @@ class ModuloProductos {
             if (data.success) {
                 this.cerrarModalActual();
                 this.mostrarNotificacion(data.message, 'success');
+                this.filtroStock = null;
                 await this.cargarProductos();
                 if (window.pos?.cache) window.pos.cache.delete(window.pos.apiUrl + '?accion=getProductos');
                 this.notificarActualizacionProductos();
@@ -329,6 +393,7 @@ class ModuloProductos {
             const data = await response.json();
             if (data.success) {
                 this.mostrarNotificacion(data.message, 'success');
+                this.filtroStock = null;
                 await this.cargarProductos();
                 if (window.pos?.cache) window.pos.cache.delete(window.pos.apiUrl + '?accion=getProductos');
                 this.notificarActualizacionProductos();
@@ -749,7 +814,10 @@ class ModuloProductos {
         if (categoriaSelect) {
             const ns = categoriaSelect.cloneNode(true);
             categoriaSelect.parentNode.replaceChild(ns, categoriaSelect);
-            ns.addEventListener('change', () => this.buscarProductos());
+            ns.addEventListener('change', () => {
+                this.filtroStock = null;
+                this.buscarProductos();
+            });
         }
 
         const btnLimpiar = document.getElementById('btnLimpiarBusqueda');
@@ -763,6 +831,7 @@ class ModuloProductos {
                 if (cs) cs.value = 'Todas';
                 this.terminoBusqueda = '';
                 this.categoriaFiltro = 'Todas';
+                this.filtroStock = null;
                 this.cargarProductos();
             });
         }
