@@ -432,8 +432,7 @@ class ModuloInventario {
                 <select id="histFiltroTipo">
                     <option value="">Todos los tipos</option>
                     <option value="entrada" ${f.tipo === 'entrada' ? 'selected' : ''}>Entradas</option>
-                    <option value="salida"  ${f.tipo === 'salida'  ? 'selected' : ''}>Salidas</option>
-                    <option value="ajuste"  ${f.tipo === 'ajuste'  ? 'selected' : ''}>Ajustes</option>
+                    <option value="salida"  ${f.tipo === 'salida'  ? 'selected' : ''}>Salidas/Ajustes</option>
                 </select>
                 <input type="date" id="histFiltroFechaInicio" value="${this.escapeHTML(f.fecha_inicio)}"
                        placeholder="Fecha inicio">
@@ -700,7 +699,7 @@ class ModuloInventario {
                 fetch(`${this.apiUrl}?accion=getProductosMenosVendidos&dias=${dias}&_t=${Date.now()}`).then(r => r.json())
             ]);
 
-            const renderTabla = (productos, titulo, iconClass) => {
+            const renderTabla = (productos, titulo, esMasVendido) => {
                 if (!productos || productos.length === 0) {
                     return `<div class="inv-empty">
                         <i class="fas fa-chart-bar"></i>
@@ -716,8 +715,9 @@ class ModuloInventario {
                         <td style="text-align:right;">${parseFloat(p.total_ingresos || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</td>
                     </tr>`).join('');
 
+                const iconClass = esMasVendido ? 'fa-arrow-trend-up mas' : 'fa-arrow-trend-down menos';
                 return `<div class="vendidos-tabla-titulo">
-                    <i class="fas ${iconClass} ${iconClass.includes('up') ? 'mas' : 'menos'}"></i>
+                    <i class="fas ${iconClass}"></i>
                     ${titulo}
                 </div>
                 <div class="vendidos-tabla-wrap">
@@ -737,8 +737,8 @@ class ModuloInventario {
             };
 
             wrap.innerHTML = `<div class="vendidos-grid">
-                <div>${renderTabla(masData.success ? masData.productos : [], 'Más Vendidos', 'fa-arrow-trend-up')}</div>
-                <div>${renderTabla(menosData.success ? menosData.productos : [], 'Menos Vendidos', 'fa-arrow-trend-down')}</div>
+                <div>${renderTabla(masData.success ? masData.productos : [], 'Más Vendidos', true)}</div>
+                <div>${renderTabla(menosData.success ? menosData.productos : [], 'Menos Vendidos', false)}</div>
             </div>`;
         } catch (err) {
             console.error('Error cargando vendidos:', err);
