@@ -24,7 +24,6 @@ class ProductosAdmin {
         try {
             $id = filter_var($id, FILTER_VALIDATE_INT);
             if (!$id || $id <= 0) return ['success' => false, 'message' => 'ID inválido'];
-
             $stmt = $conn->prepare("SELECT * FROM productos WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
@@ -36,6 +35,82 @@ class ProductosAdmin {
         } catch (Exception $e) {
             error_log("Error en obtenerPorId: " . $e->getMessage());
             return ['success' => false, 'message' => 'Error al obtener producto'];
+        }
+    }
+
+    public function verificarCodigo($codigo) {
+        global $conn;
+        try {
+            $codigo = substr(trim($codigo), 0, 50);
+            if (empty($codigo)) return ['success' => false, 'message' => 'Código requerido'];
+
+            $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE codigo_barras = ?");
+            $stmt->bind_param("s", $codigo);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows > 0) {
+                $producto = $result->fetch_assoc();
+                $stmt->close();
+                return ['success' => true, 'existe' => true, 'producto' => $producto];
+            }
+
+            $stmt->close();
+            return ['success' => true, 'existe' => false];
+        } catch (Exception $e) {
+            error_log("Error en verificarCodigo: " . $e->getMessage());
+            return ['success' => false, 'message' => 'Error al verificar código'];
+        }
+    }
+
+    public function incrementarStock($id, $cantidad, $justificacion = 'Entrada de mercancía') {
+        global $conn;
+        try {
+            $id       = filter_var($id,       FILTER_VALIDATE_INT);
+            $cantidad = filter_var($cantidad,  FILTER_VALIDATE_INT);
+
+            if (!$id       || $id <= 0)       return ['success' => false, 'message' => 'ID inválido'];
+            if (!$cantidad || $cantidad <= 0) return ['success' => false, 'message' => 'Cantidad inválida'];
+            if ($cantidad > 9999)             return ['success' => false, 'message' => 'Cantidad máxima permitida es 9,999'];
+
+            $justificacion = substr(trim($justificacion ?: 'Entrada de mercancía'), 0, 255);
+
+            $stmt = $conn->prepare("SELECT id, nombre, stock_actual FROM productos WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows === 0) { $stmt->close(); return ['success' => false, 'message' => 'Producto no encontrado']; }
+            $producto = $result->fetch_assoc();
+            $stmt->close();
+
+            $stock_anterior = intval($producto['stock_actual']);
+            $stock_nuevo    = $stock_anterior + $cantidad;
+
+            $conn->begin_transaction();
+
+            $stmt = $conn->prepare("UPDATE productos SET stock_actual = ? WHERE id = ?");
+            $stmt->bind_param("ii", $stock_nuevo, $id);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, justificacion) VALUES (?, 'entrada', ?, ?, ?, ?)");
+            $stmt->bind_param("iiiss", $id, $cantidad, $stock_anterior, $stock_nuevo, $justificacion);
+            $stmt->execute();
+            $stmt->close();
+
+            $conn->commit();
+
+            return [
+                'success'         => true,
+                'message'         => "Stock actualizado — {$producto['nombre']}: {$stock_anterior} → {$stock_nuevo}",
+                'stock_anterior'  => $stock_anterior,
+                'stock_nuevo'     => $stock_nuevo,
+                'producto_nombre' => $producto['nombre']
+            ];
+        } catch (Exception $e) {
+            $conn->rollback();
+            error_log("Error en incrementarStock: " . $e->getMessage());
+            return ['success' => false, 'message' => 'Error al actualizar stock: ' . $e->getMessage()];
         }
     }
 
@@ -294,17 +369,14 @@ class ProductosAdmin {
             return ['success' => false, 'message' => 'Error al leer el archivo: ' . $e->getMessage()];
         }
 
-        if (empty($filas)) {
-            return ['success' => false, 'message' => 'El archivo está vacío'];
-        }
+        if (empty($filas)) return ['success' => false, 'message' => 'El archivo está vacío'];
 
         $encabezados = array_map(fn($h) => strtolower(trim((string)$h)), $filas[0]);
         $requeridos  = ['codigo_barras','nombre','descripcion','categoria','precio','stock_minimo','stock_actual'];
 
         foreach ($requeridos as $campo) {
-            if (!in_array($campo, $encabezados, true)) {
+            if (!in_array($campo, $encabezados, true))
                 return ['success' => false, 'message' => "Falta la columna requerida: {$campo}"];
-            }
         }
 
         $mapa         = array_flip($encabezados);
@@ -337,25 +409,10 @@ class ProductosAdmin {
 
                 $totalFilas++;
 
-                if (empty($codigoBarras)) {
-                    $errores[] = ['fila' => $numFila, 'mensaje' => 'El código de barras es requerido'];
-                    continue;
-                }
-
-                if (!preg_match('/^[a-zA-Z0-9\-]+$/', $codigoBarras)) {
-                    $errores[] = ['fila' => $numFila, 'mensaje' => "Código de barras inválido: {$codigoBarras}"];
-                    continue;
-                }
-
-                if (empty($nombre)) {
-                    $errores[] = ['fila' => $numFila, 'mensaje' => 'El nombre es requerido'];
-                    continue;
-                }
-
-                if (!is_numeric($precioStr) || (float)$precioStr < 0) {
-                    $errores[] = ['fila' => $numFila, 'mensaje' => "Precio inválido: {$precioStr}"];
-                    continue;
-                }
+                if (empty($codigoBarras)) { $errores[] = ['fila' => $numFila, 'mensaje' => 'El código de barras es requerido']; continue; }
+                if (!preg_match('/^[a-zA-Z0-9\-]+$/', $codigoBarras)) { $errores[] = ['fila' => $numFila, 'mensaje' => "Código de barras inválido: {$codigoBarras}"]; continue; }
+                if (empty($nombre)) { $errores[] = ['fila' => $numFila, 'mensaje' => 'El nombre es requerido']; continue; }
+                if (!is_numeric($precioStr) || (float)$precioStr < 0) { $errores[] = ['fila' => $numFila, 'mensaje' => "Precio inválido: {$precioStr}"]; continue; }
 
                 $precio      = (float)$precioStr;
                 $stockMinimo = (is_numeric($stockMinStr) && (int)$stockMinStr >= 0) ? (int)$stockMinStr : 0;
@@ -377,10 +434,7 @@ class ProductosAdmin {
                 $existe = $stmt->num_rows > 0;
                 $stmt->close();
 
-                if ($existe) {
-                    $advertencias[] = ['fila' => $numFila, 'mensaje' => "Código {$codigoBarras} ya existe, se omitió"];
-                    continue;
-                }
+                if ($existe) { $advertencias[] = ['fila' => $numFila, 'mensaje' => "Código {$codigoBarras} ya existe, se omitió"]; continue; }
 
                 $stmt = $conn->prepare("INSERT INTO productos (codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 $stmt->bind_param("ssssdii", $codigoBarras, $nombre, $descripcion, $categoria, $precio, $stockMinimo, $stockActual);

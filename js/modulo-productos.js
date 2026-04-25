@@ -162,6 +162,7 @@ class ModuloProductos {
                 </div>
             </div>`;
 
+        // FIX: uso de optional chaining para evitar null.addEventListener
         container.querySelector('#statStockBajo')?.addEventListener('click', () => this.aplicarFiltroStock('bajo'));
         container.querySelector('#statSinStock')?.addEventListener('click',  () => this.aplicarFiltroStock('sin_stock'));
     }
@@ -172,6 +173,7 @@ class ModuloProductos {
 
         const productos = lista !== null ? lista : this.productos;
 
+        // FIX: uso de optional chaining para tableContainer
         const tableContainer = container.closest('.productos-tabla-container');
         const bannerExistente = tableContainer?.querySelector('.filtro-stock-banner');
         if (bannerExistente) bannerExistente.remove();
@@ -187,7 +189,9 @@ class ModuloProductos {
                 &nbsp;—&nbsp;
                 <button class="btn-quitar-filtro-stock">Quitar filtro</button>`;
             tableContainer.insertBefore(banner, tableContainer.firstChild);
-            banner.querySelector('.btn-quitar-filtro-stock').addEventListener('click', () => this.aplicarFiltroStock(this.filtroStock));
+
+            // FIX: optional chaining para evitar null.addEventListener
+            banner.querySelector('.btn-quitar-filtro-stock')?.addEventListener('click', () => this.aplicarFiltroStock(this.filtroStock));
         }
 
         if (productos.length === 0) {
@@ -205,6 +209,7 @@ class ModuloProductos {
                     </td>
                 </tr>`;
             if (!this.filtroStock) {
+                // FIX: optional chaining para evitar null.addEventListener
                 container.querySelector('.btn-agregar-producto')?.addEventListener('click', () => this.mostrarModalFormulario());
             }
             return;
@@ -327,23 +332,30 @@ class ModuloProductos {
             </div>`;
         this.modalActual = modal;
         document.body.appendChild(modal);
-        modal.querySelector('.cerrar-modal').addEventListener('click', () => this.cerrarModalActual());
-        modal.querySelector('.btn-cancelar').addEventListener('click', () => this.cerrarModalActual());
-        modal.querySelector('#productoForm').addEventListener('submit', e => { e.preventDefault(); this.guardarProducto(); });
-        modal.querySelector('#codigo_barras')?.focus();
+
+        // FIX: null checks antes de addEventListener
+        const cerrarBtn = modal.querySelector('.cerrar-modal');
+        const cancelarBtn = modal.querySelector('.btn-cancelar');
+        const form = modal.querySelector('#productoForm');
+        const codigoInput = modal.querySelector('#codigo_barras');
+
+        if (cerrarBtn)  cerrarBtn.addEventListener('click',  () => this.cerrarModalActual());
+        if (cancelarBtn) cancelarBtn.addEventListener('click', () => this.cerrarModalActual());
+        if (form)        form.addEventListener('submit', e => { e.preventDefault(); this.guardarProducto(); });
+        if (codigoInput) codigoInput.focus();
     }
 
     async guardarProducto() {
         const form = document.getElementById('productoForm');
         if (!form) return;
         const datos = {
-            codigo_barras: form.querySelector('#codigo_barras').value.trim(),
-            nombre:        form.querySelector('#nombre').value.trim(),
-            descripcion:   form.querySelector('#descripcion').value,
-            categoria:     form.querySelector('#categoria').value,
-            precio:        parseFloat(form.querySelector('#precio').value),
-            stock_minimo:  parseInt(form.querySelector('#stock_minimo').value) || 0,
-            stock_actual:  parseInt(form.querySelector('#stock_actual').value) || 0
+            codigo_barras: form.querySelector('#codigo_barras')?.value.trim()  || '',
+            nombre:        form.querySelector('#nombre')?.value.trim()         || '',
+            descripcion:   form.querySelector('#descripcion')?.value           || '',
+            categoria:     form.querySelector('#categoria')?.value             || 'Todas',
+            precio:        parseFloat(form.querySelector('#precio')?.value     || 0),
+            stock_minimo:  parseInt(form.querySelector('#stock_minimo')?.value || 0) || 0,
+            stock_actual:  parseInt(form.querySelector('#stock_actual')?.value  || 0) || 0
         };
         if (!datos.codigo_barras) { this.mostrarNotificacion('El código de barras es requerido', 'warning'); return; }
         if (!datos.nombre)        { this.mostrarNotificacion('El nombre es requerido', 'warning'); return; }
@@ -438,12 +450,27 @@ class ModuloProductos {
                 </div>
                 <div id="ticketResultado"></div>
             </div>`;
-        const folioInput = container.querySelector('#folioInput');
-        folioInput.addEventListener('focus', () => { folioInput.style.borderColor = 'var(--secondary)'; folioInput.style.boxShadow = '0 0 0 3px rgba(43,124,48,.2)'; });
-        folioInput.addEventListener('blur',  () => { folioInput.style.borderColor = 'var(--light)';     folioInput.style.boxShadow = 'none'; });
-        folioInput.addEventListener('keypress', e => { if (e.key === 'Enter') this.buscarTicket(); });
-        container.querySelector('#btnBuscarTicket').addEventListener('click', () => this.buscarTicket());
-        folioInput.focus();
+
+        // FIX: null checks para todos los elementos del ticket
+        const folioInput      = container.querySelector('#folioInput');
+        const btnBuscarTicket = container.querySelector('#btnBuscarTicket');
+
+        if (folioInput) {
+            folioInput.addEventListener('focus', () => {
+                folioInput.style.borderColor = 'var(--secondary)';
+                folioInput.style.boxShadow   = '0 0 0 3px rgba(43,124,48,.2)';
+            });
+            folioInput.addEventListener('blur', () => {
+                folioInput.style.borderColor = 'var(--light)';
+                folioInput.style.boxShadow   = 'none';
+            });
+            folioInput.addEventListener('keypress', e => { if (e.key === 'Enter') this.buscarTicket(); });
+            folioInput.focus();
+        }
+
+        if (btnBuscarTicket) {
+            btnBuscarTicket.addEventListener('click', () => this.buscarTicket());
+        }
     }
 
     async buscarTicket() {
@@ -590,17 +617,34 @@ class ModuloProductos {
                     </button>
                 </div>`}
             </div>`;
-        const motivoTA = resultado.querySelector('#motivoCancelacion');
+
+        // FIX: null checks para todos los elementos del resultado
+        const motivoTA          = resultado.querySelector('#motivoCancelacion');
+        const btnConfirmar      = resultado.querySelector('#btnConfirmarCancelacion');
+        const btnDescartar      = resultado.querySelector('#btnDescartarBusqueda');
+
         if (motivoTA) {
-            motivoTA.addEventListener('focus', () => { motivoTA.style.borderColor = 'var(--secondary)'; motivoTA.style.boxShadow = '0 0 0 3px rgba(43,124,48,.2)'; });
-            motivoTA.addEventListener('blur',  () => { motivoTA.style.borderColor = 'var(--light)';     motivoTA.style.boxShadow = 'none'; });
+            motivoTA.addEventListener('focus', () => {
+                motivoTA.style.borderColor = 'var(--secondary)';
+                motivoTA.style.boxShadow   = '0 0 0 3px rgba(43,124,48,.2)';
+            });
+            motivoTA.addEventListener('blur', () => {
+                motivoTA.style.borderColor = 'var(--light)';
+                motivoTA.style.boxShadow   = 'none';
+            });
         }
-        resultado.querySelector('#btnConfirmarCancelacion')?.addEventListener('click', () => this.confirmarCancelacionTicket(venta.folio));
-        resultado.querySelector('#btnDescartarBusqueda')?.addEventListener('click', () => {
-            resultado.innerHTML = '';
-            const folioInput = document.getElementById('folioInput');
-            if (folioInput) { folioInput.value = ''; folioInput.focus(); }
-        });
+
+        if (btnConfirmar) {
+            btnConfirmar.addEventListener('click', () => this.confirmarCancelacionTicket(venta.folio));
+        }
+
+        if (btnDescartar) {
+            btnDescartar.addEventListener('click', () => {
+                resultado.innerHTML = '';
+                const folioInput = document.getElementById('folioInput');
+                if (folioInput) { folioInput.value = ''; folioInput.focus(); }
+            });
+        }
     }
 
     async confirmarCancelacionTicket(folio) {
@@ -631,11 +675,16 @@ class ModuloProductos {
                                 <i class="fas fa-search"></i> Buscar otro ticket
                             </button>
                         </div>`;
-                    resultado.querySelector('#btnNuevaBusqueda').addEventListener('click', () => {
-                        resultado.innerHTML = '';
-                        const folioInput = document.getElementById('folioInput');
-                        if (folioInput) { folioInput.value = ''; folioInput.focus(); }
-                    });
+
+                    // FIX: null check antes de addEventListener
+                    const btnNueva = resultado.querySelector('#btnNuevaBusqueda');
+                    if (btnNueva) {
+                        btnNueva.addEventListener('click', () => {
+                            resultado.innerHTML = '';
+                            const folioInput = document.getElementById('folioInput');
+                            if (folioInput) { folioInput.value = ''; folioInput.focus(); }
+                        });
+                    }
                 }
                 this.mostrarNotificacion('✅ ' + data.message, 'success');
                 await this.cargarProductos();
@@ -684,9 +733,15 @@ class ModuloProductos {
         this.modalActual = modal;
         document.body.appendChild(modal);
         this._initDropZone(modal);
-        modal.querySelector('.cerrar-modal').addEventListener('click', () => this.cerrarModalActual());
-        modal.querySelector('#btnCancelarImportacion').addEventListener('click', () => this.cerrarModalActual());
-        modal.querySelector('#btnIniciarImportacion').addEventListener('click', () => this.procesarImportacion());
+
+        // FIX: null checks antes de addEventListener
+        const cerrarBtn   = modal.querySelector('.cerrar-modal');
+        const cancelarBtn = modal.querySelector('#btnCancelarImportacion');
+        const importarBtn = modal.querySelector('#btnIniciarImportacion');
+
+        if (cerrarBtn)   cerrarBtn.addEventListener('click',   () => this.cerrarModalActual());
+        if (cancelarBtn) cancelarBtn.addEventListener('click', () => this.cerrarModalActual());
+        if (importarBtn) importarBtn.addEventListener('click', () => this.procesarImportacion());
     }
 
     _initDropZone(modal) {
@@ -695,6 +750,10 @@ class ModuloProductos {
         const btnSel    = modal.querySelector('#btnSeleccionarArchivo');
         const nombreEl  = modal.querySelector('#archivoNombre');
         const btnImport = modal.querySelector('#btnIniciarImportacion');
+
+        // FIX: verificar que todos los elementos existen antes de usar
+        if (!dropZone || !fileInput || !btnSel || !nombreEl || !btnImport) return;
+
         btnSel.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', () => {
             if (fileInput.files[0]) this._setArchivoSeleccionado(fileInput.files[0], nombreEl, btnImport);
@@ -712,8 +771,8 @@ class ModuloProductos {
     _setArchivoSeleccionado(file, nombreEl, btnImport) {
         if (!file.name.toLowerCase().endsWith('.xlsx')) { this.mostrarNotificacion('Solo se aceptan archivos .xlsx', 'warning'); return; }
         if (file.size > 5 * 1024 * 1024) { this.mostrarNotificacion('El archivo no puede superar 5MB', 'warning'); return; }
-        nombreEl.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-        btnImport.disabled = false;
+        if (nombreEl) nombreEl.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        if (btnImport) btnImport.disabled = false;
     }
 
     async procesarImportacion() {
@@ -721,8 +780,7 @@ class ModuloProductos {
         const btnImport = document.getElementById('btnIniciarImportacion');
         const resultado = document.getElementById('resultadoImportacion');
         if (!fileInput?.files[0]) { this.mostrarNotificacion('Seleccione un archivo primero', 'warning'); return; }
-        btnImport.disabled = true;
-        btnImport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        if (btnImport) { btnImport.disabled = true; btnImport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...'; }
         if (resultado) resultado.style.display = 'none';
         try {
             const formData = new FormData();
@@ -743,8 +801,7 @@ class ModuloProductos {
             console.error('Error importando:', error);
             this.mostrarNotificacion('Error de conexión', 'error');
         } finally {
-            btnImport.disabled = false;
-            btnImport.innerHTML = '<i class="fas fa-upload"></i> Importar';
+            if (btnImport) { btnImport.disabled = false; btnImport.innerHTML = '<i class="fas fa-upload"></i> Importar'; }
         }
     }
 
@@ -784,21 +841,21 @@ class ModuloProductos {
 
     cargarEventos() {
         const btnAgregar = document.getElementById('btnAgregarProducto');
-        if (btnAgregar) {
+        if (btnAgregar && btnAgregar.parentNode) {
             const nb = btnAgregar.cloneNode(true);
             btnAgregar.parentNode.replaceChild(nb, btnAgregar);
             nb.addEventListener('click', () => this.mostrarModalFormulario());
         }
 
         const btnImportar = document.getElementById('btnImportarExcel');
-        if (btnImportar) {
+        if (btnImportar && btnImportar.parentNode) {
             const nb = btnImportar.cloneNode(true);
             btnImportar.parentNode.replaceChild(nb, btnImportar);
             nb.addEventListener('click', () => this.mostrarModalImportacion());
         }
 
         const buscarInput = document.getElementById('buscarProductoInput');
-        if (buscarInput) {
+        if (buscarInput && buscarInput.parentNode) {
             const ni = buscarInput.cloneNode(true);
             buscarInput.parentNode.replaceChild(ni, buscarInput);
             ni.addEventListener('input', () => {
@@ -811,7 +868,7 @@ class ModuloProductos {
         }
 
         const categoriaSelect = document.getElementById('categoriaFiltro');
-        if (categoriaSelect) {
+        if (categoriaSelect && categoriaSelect.parentNode) {
             const ns = categoriaSelect.cloneNode(true);
             categoriaSelect.parentNode.replaceChild(ns, categoriaSelect);
             ns.addEventListener('change', () => {
@@ -821,7 +878,7 @@ class ModuloProductos {
         }
 
         const btnLimpiar = document.getElementById('btnLimpiarBusqueda');
-        if (btnLimpiar) {
+        if (btnLimpiar && btnLimpiar.parentNode) {
             const nb = btnLimpiar.cloneNode(true);
             btnLimpiar.parentNode.replaceChild(nb, btnLimpiar);
             nb.addEventListener('click', () => {
@@ -871,13 +928,21 @@ class ModuloProductos {
     mostrarModulo() {
         document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');
         this._ocultarCarrito();
+
+        // FIX: verificar que .contenido-principal existe antes de operar
+        const contenidoPrincipal = document.querySelector('.contenido-principal');
+        if (!contenidoPrincipal) {
+            console.error('No se encontró .contenido-principal en el DOM');
+            return;
+        }
+
         let moduloProductos = document.getElementById('moduloProductos');
         if (!moduloProductos) {
             moduloProductos = document.createElement('section');
             moduloProductos.id        = 'moduloProductos';
             moduloProductos.className = 'modulo-productos';
             moduloProductos.innerHTML = this.renderModuloHTML();
-            document.querySelector('.contenido-principal').appendChild(moduloProductos);
+            contenidoPrincipal.appendChild(moduloProductos);
         }
         moduloProductos.style.display = 'block';
         this.tabActiva = 'productos';

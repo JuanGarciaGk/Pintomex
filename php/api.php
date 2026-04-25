@@ -7,7 +7,7 @@ register_shutdown_function(function () {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
         if (ob_get_length()) ob_clean();
-        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => 'Error interno del servidor']);
         exit;
     }
@@ -22,7 +22,6 @@ require_once 'productos_admin.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('X-Content-Type-Options: nosniff');
-header('X-Requested-With: XMLHttpRequest');
 
 if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
     ob_start('ob_gzhandler');
@@ -72,7 +71,8 @@ $acciones_sin_csrf = [
     'getHistorialCaja', 'getDetalleCorte', 'getCsrfToken',
     'getProductosAdmin', 'getProducto', 'buscarProductosAdmin',
     'getProductosEstadisticas', 'getCategoriasConConteo',
-    'buscarVentaPorFolio', 'obtenerDetallesVenta'
+    'buscarVentaPorFolio', 'obtenerDetallesVenta',
+    'verificarCodigoBarras'
 ];
 
 if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
@@ -93,7 +93,7 @@ $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
 
 if ($metodo === 'POST' && in_array($accion, [
     'registrarProducto', 'actualizarProducto', 'eliminarProducto',
-    'cancelarVenta', 'importarProductosExcel'
+    'cancelarVenta', 'importarProductosExcel', 'incrementarStock'
 ])) {
     array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
 }
@@ -155,6 +155,24 @@ try {
         case 'buscarPorCodigo':
             $codigo   = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['codigo'] ?? ''), 0, 50);
             $response = $productos->buscarPorCodigo($codigo);
+            break;
+
+        case 'verificarCodigoBarras':
+            $codigo = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['codigo'] ?? ''), 0, 50);
+            $response = $productosAdmin
+                ? $productosAdmin->verificarCodigo($codigo)
+                : ['success' => false, 'message' => 'Módulo no disponible'];
+            break;
+
+        case 'incrementarStock':
+            $id            = filter_var($_POST['id']            ?? 0,                    FILTER_VALIDATE_INT);
+            $cantidad      = filter_var($_POST['cantidad']      ?? 0,                    FILTER_VALIDATE_INT);
+            $justificacion = isset($_POST['justificacion']) ? substr(sanitize($_POST['justificacion']), 0, 255) : 'Entrada de mercancía';
+            if (!$id || $id <= 0)           { $response = ['success' => false, 'message' => 'ID inválido'];       break; }
+            if (!$cantidad || $cantidad <= 0) { $response = ['success' => false, 'message' => 'Cantidad inválida']; break; }
+            $response = $productosAdmin
+                ? $productosAdmin->incrementarStock($id, $cantidad, $justificacion)
+                : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'agregarCarrito':
@@ -322,25 +340,13 @@ try {
             break;
 
         case 'importarProductosExcel':
-            if (!$productosAdmin) {
-                $response = ['success' => false, 'message' => 'Módulo no disponible'];
-                break;
-            }
-            if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
-                $response = ['success' => false, 'message' => 'No se recibió ningún archivo válido'];
-                break;
-            }
+            if (!$productosAdmin) { $response = ['success' => false, 'message' => 'Módulo no disponible']; break; }
+            if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) { $response = ['success' => false, 'message' => 'No se recibió ningún archivo válido']; break; }
             $archivo  = $_FILES['archivo'];
             $maxBytes = 5 * 1024 * 1024;
-            if ($archivo['size'] > $maxBytes) {
-                $response = ['success' => false, 'message' => 'El archivo no puede superar 5MB'];
-                break;
-            }
+            if ($archivo['size'] > $maxBytes) { $response = ['success' => false, 'message' => 'El archivo no puede superar 5MB']; break; }
             $ext = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
-            if ($ext !== 'xlsx') {
-                $response = ['success' => false, 'message' => 'Solo se aceptan archivos .xlsx'];
-                break;
-            }
+            if ($ext !== 'xlsx') { $response = ['success' => false, 'message' => 'Solo se aceptan archivos .xlsx']; break; }
             $finfo       = new finfo(FILEINFO_MIME_TYPE);
             $mime        = $finfo->file($archivo['tmp_name']);
             $mimeValidos = [
@@ -348,10 +354,7 @@ try {
                 'application/zip',
                 'application/octet-stream',
             ];
-            if (!in_array($mime, $mimeValidos, true)) {
-                $response = ['success' => false, 'message' => 'Tipo de archivo no válido'];
-                break;
-            }
+            if (!in_array($mime, $mimeValidos, true)) { $response = ['success' => false, 'message' => 'Tipo de archivo no válido']; break; }
             $response = $productosAdmin->importarExcel($archivo);
             if (!empty($response['importados'])) {
                 array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
