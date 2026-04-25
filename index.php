@@ -248,6 +248,9 @@ header('Cache-Control: public, max-age=3600');
 
     <link rel="preload" href="css/modulo-productos.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/modulo-productos.css"></noscript>
+
+    <link rel="preload" href="css/modulo-inventario.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/modulo-inventario.css"></noscript>
 </head>
 <body>
     <div id="offlineBanner" role="alert" aria-live="assertive">
@@ -455,5 +458,6 @@ header('Cache-Control: public, max-age=3600');
     <script src="js/script.js" defer></script>
     <script src="js/modulo-caja.js" defer></script>
     <script src="js/modulo-productos.js" defer></script>
+    <script src="js/modulo-inventario.js" defer></script>
 </body>
 </html>

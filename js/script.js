@@ -601,6 +601,9 @@ class POSSystem {
                 } else if (modulo === 'productos') {
                     this._ocultarCarrito();
                     if (window.moduloProductos) window.moduloProductos.mostrarModulo();
+                } else if (modulo === 'inventario') {
+                    this._ocultarCarrito();
+                    if (window.moduloInventario) window.moduloInventario.mostrarModulo();
                 }
             });
 

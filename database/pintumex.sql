@@ -220,6 +220,60 @@ DELIMITER ;
 CALL crear_indices();
 DROP PROCEDURE IF EXISTS crear_indices;
 
+-- ─── Migración: columna tipo_detalle en movimientos_inventario ───────────────
+DROP PROCEDURE IF EXISTS agregar_tipo_detalle_inv;
+
+DELIMITER $$
+
+CREATE PROCEDURE agregar_tipo_detalle_inv()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE table_schema = DATABASE()
+          AND table_name   = 'movimientos_inventario'
+          AND column_name  = 'tipo_detalle'
+    ) THEN
+        ALTER TABLE movimientos_inventario
+            ADD COLUMN tipo_detalle VARCHAR(50) NULL AFTER tipo;
+    END IF;
+END$$
+
+DELIMITER ;
+
+CALL agregar_tipo_detalle_inv();
+DROP PROCEDURE IF EXISTS agregar_tipo_detalle_inv;
+
+-- ─── Migración: índice de fecha en movimientos_inventario ────────────────────
+DROP PROCEDURE IF EXISTS crear_indices_inventario;
+
+DELIMITER $$
+
+CREATE PROCEDURE crear_indices_inventario()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.STATISTICS
+        WHERE table_schema = DATABASE()
+          AND table_name   = 'movimientos_inventario'
+          AND index_name   = 'idx_movinv_fecha'
+    ) THEN
+        ALTER TABLE movimientos_inventario ADD INDEX idx_movinv_fecha (fecha);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.STATISTICS
+        WHERE table_schema = DATABASE()
+          AND table_name   = 'movimientos_inventario'
+          AND index_name   = 'idx_movinv_tipo'
+    ) THEN
+        ALTER TABLE movimientos_inventario ADD INDEX idx_movinv_tipo (tipo);
+    END IF;
+END$$
+
+DELIMITER ;
+
+CALL crear_indices_inventario();
+DROP PROCEDURE IF EXISTS crear_indices_inventario;
+
 INSERT INTO productos
     (codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual)
 VALUES

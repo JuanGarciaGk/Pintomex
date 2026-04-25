@@ -18,6 +18,7 @@ require_once 'productos.php';
 require_once 'carrito.php';
 require_once 'caja.php';
 require_once 'productos_admin.php';
+require_once 'inventario.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, no-store, must-revalidate');
@@ -72,7 +73,9 @@ $acciones_sin_csrf = [
     'getProductosAdmin', 'getProducto', 'buscarProductosAdmin',
     'getProductosEstadisticas', 'getCategoriasConConteo',
     'buscarVentaPorFolio', 'obtenerDetallesVenta',
-    'verificarCodigoBarras'
+    'verificarCodigoBarras',
+    'getHistorialInventario', 'getAlertasStock',
+    'getProductosMasVendidos', 'getProductosMenosVendidos', 'getResumenInventario'
 ];
 
 if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
@@ -90,10 +93,12 @@ $productos      = new Productos();
 $carrito        = new Carrito();
 $caja           = new Caja();
 $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
+$inventario     = new Inventario();
 
 if ($metodo === 'POST' && in_array($accion, [
     'registrarProducto', 'actualizarProducto', 'eliminarProducto',
-    'cancelarVenta', 'importarProductosExcel', 'incrementarStock'
+    'cancelarVenta', 'importarProductosExcel', 'incrementarStock',
+    'registrarEntrada', 'registrarSalida'
 ])) {
     array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
 }
@@ -105,7 +110,11 @@ $cache_ttl = [
     'getCarrito'               => 10,
     'getProductosAdmin'        => 300,
     'getProductosEstadisticas' => 60,
-    'getCategoriasConConteo'   => 300
+    'getCategoriasConConteo'   => 300,
+    'getAlertasStock'          => 60,
+    'getResumenInventario'     => 30,
+    'getProductosMasVendidos'  => 300,
+    'getProductosMenosVendidos'=> 300
 ];
 
 $cache_key  = md5($_SERVER['REQUEST_URI']);
@@ -359,6 +368,48 @@ try {
             if (!empty($response['importados'])) {
                 array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
             }
+            break;
+
+        case 'registrarEntrada':
+            $response = $inventario->registrarEntrada($_POST);
+            break;
+
+        case 'registrarSalida':
+            $response = $inventario->registrarSalida($_POST);
+            break;
+
+        case 'getHistorialInventario':
+            $filtros = [
+                'producto_id'  => $_GET['producto_id']  ?? null,
+                'tipo'         => $_GET['tipo']          ?? null,
+                'fecha_inicio' => $_GET['fecha_inicio']  ?? null,
+                'fecha_fin'    => $_GET['fecha_fin']     ?? null,
+                'page'         => $_GET['page']          ?? 1,
+                'per_page'     => $_GET['per_page']      ?? 50,
+            ];
+            $response = $inventario->obtenerHistorial($filtros);
+            break;
+
+        case 'getAlertasStock':
+            $response = $inventario->obtenerAlertasStock();
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'getProductosMasVendidos':
+            $dias     = filter_var($_GET['dias'] ?? 7, FILTER_VALIDATE_INT) ?: 7;
+            $response = $inventario->obtenerProductosMasVendidos($dias);
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'getProductosMenosVendidos':
+            $dias     = filter_var($_GET['dias'] ?? 7, FILTER_VALIDATE_INT) ?: 7;
+            $response = $inventario->obtenerProductosMenosVendidos($dias);
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'getResumenInventario':
+            $response = $inventario->obtenerResumenInventario();
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         default:
