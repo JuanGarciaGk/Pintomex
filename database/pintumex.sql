@@ -1,7 +1,4 @@
-CREATE DATABASE IF NOT EXISTS pintumex_pos
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
-
+CREATE DATABASE IF NOT EXISTS pintumex_pos CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE pintumex_pos;
 
 CREATE TABLE IF NOT EXISTS productos (
@@ -9,16 +6,7 @@ CREATE TABLE IF NOT EXISTS productos (
     codigo_barras VARCHAR(50)  UNIQUE NOT NULL,
     nombre        VARCHAR(100) NOT NULL,
     descripcion   TEXT,
-    categoria     ENUM(
-                      'Todas',
-                      'Acrílicas',
-                      'Esmaltes',
-                      'Selladores',
-                      'Barniz',
-                      'Aerosol',
-                      'Impermeabilizante',
-                      'Complementos'
-                  ) DEFAULT 'Todas',
+    categoria     ENUM('Todas','Acrílicas','Esmaltes','Selladores','Barniz','Aerosol','Impermeabilizante','Complementos') DEFAULT 'Todas',
     precio        DECIMAL(10,2) NOT NULL,
     stock_minimo  INT           DEFAULT 5,
     stock_actual  INT           DEFAULT 0,
@@ -51,12 +39,9 @@ CREATE TABLE IF NOT EXISTS ventas (
     corte_caja_id     INT           NULL,
     estado            ENUM('activa','cancelada') DEFAULT 'activa',
     fecha             TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ventas_corte
-        FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
+    CONSTRAINT fk_ventas_corte FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- producto_id acepta NULL para que al eliminar un producto
--- los detalles de ventas históricas se conserven con NULL en ese campo.
 CREATE TABLE IF NOT EXISTS detalles_venta (
     id               INT AUTO_INCREMENT PRIMARY KEY,
     venta_id         INT           NOT NULL,
@@ -64,23 +49,23 @@ CREATE TABLE IF NOT EXISTS detalles_venta (
     cantidad         INT           NOT NULL,
     precio_unitario  DECIMAL(10,2) NOT NULL,
     subtotal         DECIMAL(10,2) NOT NULL,
-    CONSTRAINT fk_detalles_venta
-        FOREIGN KEY (venta_id)    REFERENCES ventas(id)    ON DELETE CASCADE,
-    CONSTRAINT fk_detalles_producto
-        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL
+    CONSTRAINT fk_detalles_venta    FOREIGN KEY (venta_id)    REFERENCES ventas(id)    ON DELETE CASCADE,
+    CONSTRAINT fk_detalles_producto FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS movimientos_inventario (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     producto_id    INT  NOT NULL,
     tipo           ENUM('entrada','salida','ajuste') NOT NULL,
+    subtipo        ENUM('compra','devolucion_cliente','venta','derrame','daño','merma','ajuste_manual','inicial','importacion') DEFAULT 'ajuste_manual',
     cantidad       INT  NOT NULL,
     stock_anterior INT  NOT NULL,
     stock_nuevo    INT  NOT NULL,
     justificacion  TEXT,
+    notas          TEXT NULL,
+    usuario        VARCHAR(100) DEFAULT 'Administrador',
     fecha          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_movinv_producto
-        FOREIGN KEY (producto_id) REFERENCES productos(id)
+    CONSTRAINT fk_movinv_producto FOREIGN KEY (producto_id) REFERENCES productos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS movimientos_caja (
@@ -91,8 +76,7 @@ CREATE TABLE IF NOT EXISTS movimientos_caja (
     monto          DECIMAL(10,2) NOT NULL,
     referencia     VARCHAR(100),
     fecha          TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_movcaja_corte
-        FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
+    CONSTRAINT fk_movcaja_corte FOREIGN KEY (corte_caja_id) REFERENCES cortes_caja(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS cancelaciones_venta (
@@ -103,126 +87,112 @@ CREATE TABLE IF NOT EXISTS cancelaciones_venta (
     monto_cancelado DECIMAL(10,2) NOT NULL,
     cancelado_por   VARCHAR(100)  DEFAULT 'Administrador',
     fecha           TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cancelacion_venta
-        FOREIGN KEY (venta_id) REFERENCES ventas(id)
+    CONSTRAINT fk_cancelacion_venta FOREIGN KEY (venta_id) REFERENCES ventas(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
+CREATE OR REPLACE VIEW vista_ventas_semanales AS
+SELECT
+    p.id,
+    p.nombre,
+    p.categoria,
+    p.stock_actual,
+    COALESCE(SUM(dv.cantidad), 0)  AS total_vendido,
+    COUNT(DISTINCT v.id)           AS num_ventas
+FROM productos p
+LEFT JOIN detalles_venta dv ON dv.producto_id = p.id
+LEFT JOIN ventas v ON v.id = dv.venta_id
+    AND v.fecha >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    AND v.estado = 'activa'
+GROUP BY p.id, p.nombre, p.categoria, p.stock_actual;
 
+DROP PROCEDURE IF EXISTS migrar_movimientos_inventario;
 DELIMITER $$
+CREATE PROCEDURE migrar_movimientos_inventario()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE table_schema = DATABASE() AND table_name = 'movimientos_inventario' AND column_name = 'subtipo'
+    ) THEN
+        ALTER TABLE movimientos_inventario
+            ADD COLUMN subtipo ENUM('compra','devolucion_cliente','venta','derrame','daño','merma','ajuste_manual','inicial','importacion') DEFAULT 'ajuste_manual' AFTER tipo,
+            ADD COLUMN notas   TEXT NULL AFTER justificacion,
+            ADD COLUMN usuario VARCHAR(100) DEFAULT 'Administrador' AFTER notas;
+        UPDATE movimientos_inventario SET subtipo = 'venta'    WHERE tipo = 'salida'  AND justificacion LIKE 'Venta%';
+        UPDATE movimientos_inventario SET subtipo = 'inicial'  WHERE tipo = 'entrada' AND justificacion LIKE 'Registro inicial%';
+        UPDATE movimientos_inventario SET subtipo = 'importacion' WHERE tipo = 'entrada' AND justificacion LIKE 'Importación%';
+        UPDATE movimientos_inventario SET subtipo = 'devolucion_cliente' WHERE tipo = 'entrada' AND justificacion LIKE 'Cancelación%';
+        UPDATE movimientos_inventario SET subtipo = 'compra'   WHERE tipo = 'entrada' AND subtipo = 'ajuste_manual' AND justificacion LIKE 'Entrada%';
+    END IF;
+END$$
+DELIMITER ;
+CALL migrar_movimientos_inventario();
+DROP PROCEDURE IF EXISTS migrar_movimientos_inventario;
 
+DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
+DELIMITER $$
 CREATE PROCEDURE migrar_fk_detalles_producto()
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.COLUMNS
-        WHERE table_schema = DATABASE()
-          AND table_name   = 'detalles_venta'
-          AND column_name  = 'producto_id'
-          AND is_nullable  = 'NO'
+        WHERE table_schema = DATABASE() AND table_name = 'detalles_venta' AND column_name = 'producto_id' AND is_nullable = 'NO'
     ) THEN
         IF EXISTS (
             SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
-            WHERE table_schema    = DATABASE()
-              AND table_name      = 'detalles_venta'
-              AND constraint_name = 'fk_detalles_producto'
-              AND constraint_type = 'FOREIGN KEY'
+            WHERE table_schema = DATABASE() AND table_name = 'detalles_venta' AND constraint_name = 'fk_detalles_producto' AND constraint_type = 'FOREIGN KEY'
         ) THEN
             ALTER TABLE detalles_venta DROP FOREIGN KEY fk_detalles_producto;
         END IF;
-
-        ALTER TABLE detalles_venta
-            MODIFY COLUMN producto_id INT NULL;
-
-        ALTER TABLE detalles_venta
-            ADD CONSTRAINT fk_detalles_producto
-                FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL;
+        ALTER TABLE detalles_venta MODIFY COLUMN producto_id INT NULL;
+        ALTER TABLE detalles_venta ADD CONSTRAINT fk_detalles_producto FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE SET NULL;
     END IF;
 END$$
-
 DELIMITER ;
-
 CALL migrar_fk_detalles_producto();
 DROP PROCEDURE IF EXISTS migrar_fk_detalles_producto;
--- ─────────────────────────────────────────────────────────────────────────────
 
 DROP PROCEDURE IF EXISTS crear_indices;
-
 DELIMITER $$
-
 CREATE PROCEDURE crear_indices()
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'productos' AND index_name = 'idx_productos_nombre'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='productos' AND index_name='idx_productos_nombre') THEN
         ALTER TABLE productos ADD INDEX idx_productos_nombre (nombre);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'productos' AND index_name = 'idx_productos_categoria'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='productos' AND index_name='idx_productos_categoria') THEN
         ALTER TABLE productos ADD INDEX idx_productos_categoria (categoria);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'ventas' AND index_name = 'idx_ventas_fecha'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='ventas' AND index_name='idx_ventas_fecha') THEN
         ALTER TABLE ventas ADD INDEX idx_ventas_fecha (fecha);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'ventas' AND index_name = 'idx_ventas_estado'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='ventas' AND index_name='idx_ventas_estado') THEN
         ALTER TABLE ventas ADD INDEX idx_ventas_estado (estado);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'ventas' AND index_name = 'idx_ventas_corte_estado'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='ventas' AND index_name='idx_ventas_corte_estado') THEN
         ALTER TABLE ventas ADD INDEX idx_ventas_corte_estado (corte_caja_id, estado);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'ventas' AND index_name = 'idx_ventas_folio'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='ventas' AND index_name='idx_ventas_folio') THEN
         ALTER TABLE ventas ADD INDEX idx_ventas_folio (folio);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'movimientos_inventario' AND index_name = 'idx_movinv_producto'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='movimientos_inventario' AND index_name='idx_movinv_producto') THEN
         ALTER TABLE movimientos_inventario ADD INDEX idx_movinv_producto (producto_id);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'movimientos_caja' AND index_name = 'idx_movcaja_corte'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='movimientos_inventario' AND index_name='idx_movinv_fecha') THEN
+        ALTER TABLE movimientos_inventario ADD INDEX idx_movinv_fecha (fecha);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='movimientos_inventario' AND index_name='idx_movinv_tipo') THEN
+        ALTER TABLE movimientos_inventario ADD INDEX idx_movinv_tipo (tipo, subtipo);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='movimientos_caja' AND index_name='idx_movcaja_corte') THEN
         ALTER TABLE movimientos_caja ADD INDEX idx_movcaja_corte (corte_caja_id);
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE table_schema = DATABASE() AND table_name = 'cancelaciones_venta' AND index_name = 'idx_cancelaciones_venta'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='cancelaciones_venta' AND index_name='idx_cancelaciones_venta') THEN
         ALTER TABLE cancelaciones_venta ADD INDEX idx_cancelaciones_venta (venta_id);
     END IF;
 END$$
-
 DELIMITER ;
-
 CALL crear_indices();
 DROP PROCEDURE IF EXISTS crear_indices;
 
-INSERT INTO productos
-    (codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual)
-VALUES
+INSERT INTO productos (codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual) VALUES
     ('7501357071482', 'Pintura Blanca Mate',       'Blanco, 19L',                   'Acrílicas',         450.50,  5, 20),
     ('7501234567892', 'Rodillo Pro 9"',             'Alta calidad',                  'Complementos',       89.90,  3, 15),
     ('7501234567893', 'Pintura Azul Cielo',         'Azul cielo, 4L',                'Acrílicas',         250.00,  5,  8),
@@ -232,4 +202,5 @@ VALUES
     ('7501234567897', 'Aerosol Negro Mate',         'Pintura en aerosol, 400ml',     'Aerosol',            85.50, 10, 25),
     ('7501234567898', 'Impermeabilizante Acrílico', 'Impermeabilizante blanco, 19L', 'Impermeabilizante', 890.00,  5,  3),
     ('7501234567899', 'Cinta de Enmascarar',        '24mm x 50m',                    'Complementos',       45.50, 10, 25),
-    ('7501234567900', 'Esmalte Negro Brillante',    'Negro brillante, 1L',           'Esmaltes',          150.00,  5, 15);
+    ('7501234567900', 'Esmalte Negro Brillante',    'Negro brillante, 1L',           'Esmaltes',          150.00,  5, 15)
+ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);

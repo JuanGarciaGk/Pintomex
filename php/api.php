@@ -18,6 +18,7 @@ require_once 'productos.php';
 require_once 'carrito.php';
 require_once 'caja.php';
 require_once 'productos_admin.php';
+require_once 'inventario.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, no-store, must-revalidate');
@@ -72,13 +73,13 @@ $acciones_sin_csrf = [
     'getProductosAdmin', 'getProducto', 'buscarProductosAdmin',
     'getProductosEstadisticas', 'getCategoriasConConteo',
     'buscarVentaPorFolio', 'obtenerDetallesVenta',
-    'verificarCodigoBarras'
+    'verificarCodigoBarras',
+    'getResumenInventario', 'getMovimientosInventario', 'getAlertasInventario',
+    'getProductosMasVendidos', 'getProductosMenosVendidos'
 ];
 
 if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
-    $csrfToken = $_POST['csrf_token']
-        ?? $_SERVER['HTTP_X_CSRF_TOKEN']
-        ?? '';
+    $csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!validarCsrfToken($csrfToken)) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'Token de seguridad inválido']);
@@ -89,23 +90,29 @@ if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
 $productos      = new Productos();
 $carrito        = new Carrito();
 $caja           = new Caja();
+$inventario     = new Inventario();
 $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
 
 if ($metodo === 'POST' && in_array($accion, [
     'registrarProducto', 'actualizarProducto', 'eliminarProducto',
-    'cancelarVenta', 'importarProductosExcel', 'incrementarStock'
+    'cancelarVenta', 'importarProductosExcel', 'incrementarStock',
+    'registrarEntradaMercancia', 'registrarAjusteInventario'
 ])) {
     array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
 }
 
 $cache_ttl = [
-    'getProductos'             => 300,
-    'getProductosPorCategoria' => 300,
-    'getEstadoCaja'            => 30,
-    'getCarrito'               => 10,
-    'getProductosAdmin'        => 300,
-    'getProductosEstadisticas' => 60,
-    'getCategoriasConConteo'   => 300
+    'getProductos'              => 300,
+    'getProductosPorCategoria'  => 300,
+    'getEstadoCaja'             => 30,
+    'getCarrito'                => 10,
+    'getProductosAdmin'         => 300,
+    'getProductosEstadisticas'  => 60,
+    'getCategoriasConConteo'    => 300,
+    'getResumenInventario'      => 60,
+    'getAlertasInventario'      => 120,
+    'getProductosMasVendidos'   => 120,
+    'getProductosMenosVendidos' => 120,
 ];
 
 $cache_key  = md5($_SERVER['REQUEST_URI']);
@@ -158,17 +165,17 @@ try {
             break;
 
         case 'verificarCodigoBarras':
-            $codigo = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['codigo'] ?? ''), 0, 50);
+            $codigo   = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['codigo'] ?? ''), 0, 50);
             $response = $productosAdmin
                 ? $productosAdmin->verificarCodigo($codigo)
                 : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'incrementarStock':
-            $id            = filter_var($_POST['id']            ?? 0,                    FILTER_VALIDATE_INT);
-            $cantidad      = filter_var($_POST['cantidad']      ?? 0,                    FILTER_VALIDATE_INT);
+            $id            = filter_var($_POST['id']       ?? 0, FILTER_VALIDATE_INT);
+            $cantidad      = filter_var($_POST['cantidad'] ?? 0, FILTER_VALIDATE_INT);
             $justificacion = isset($_POST['justificacion']) ? substr(sanitize($_POST['justificacion']), 0, 255) : 'Entrada de mercancía';
-            if (!$id || $id <= 0)           { $response = ['success' => false, 'message' => 'ID inválido'];       break; }
+            if (!$id       || $id <= 0)       { $response = ['success' => false, 'message' => 'ID inválido'];       break; }
             if (!$cantidad || $cantidad <= 0) { $response = ['success' => false, 'message' => 'Cantidad inválida']; break; }
             $response = $productosAdmin
                 ? $productosAdmin->incrementarStock($id, $cantidad, $justificacion)
@@ -180,15 +187,15 @@ try {
             $producto_id = filter_var($_POST['producto_id'], FILTER_VALIDATE_INT);
             $cantidad    = filter_var($_POST['cantidad'] ?? 1, FILTER_VALIDATE_INT);
             if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID de producto inválido']; break; }
-            if (!$cantidad || $cantidad <= 0) $cantidad = 1;
+            if (!$cantidad    || $cantidad <= 0)    $cantidad = 1;
             $response = $carrito->agregar($producto_id, $cantidad);
             break;
 
         case 'modificarCarrito':
             if (!isset($_POST['producto_id'], $_POST['cantidad'])) { $response = ['success' => false, 'message' => 'Datos incompletos']; break; }
             $producto_id = filter_var($_POST['producto_id'], FILTER_VALIDATE_INT);
-            $cantidad    = filter_var($_POST['cantidad'], FILTER_VALIDATE_INT);
-            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'ID inválido']; break; }
+            $cantidad    = filter_var($_POST['cantidad'],    FILTER_VALIDATE_INT);
+            if (!$producto_id || $producto_id <= 0)  { $response = ['success' => false, 'message' => 'ID inválido'];       break; }
             if ($cantidad === false || $cantidad < 0) { $response = ['success' => false, 'message' => 'Cantidad inválida']; break; }
             $response = $carrito->modificar($producto_id, $cantidad);
             break;
@@ -218,7 +225,7 @@ try {
             break;
 
         case 'buscarVentaPorFolio':
-            $termino = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['folio'] ?? $_GET['termino'] ?? ''), 0, 50);
+            $termino  = substr(preg_replace('/[^a-zA-Z0-9\-]/', '', $_GET['folio'] ?? $_GET['termino'] ?? ''), 0, 50);
             if (empty($termino)) { $response = ['success' => false, 'message' => 'Ingrese un folio para buscar']; break; }
             $response = $carrito->buscarVentaPorFolio($termino);
             break;
@@ -287,7 +294,7 @@ try {
             break;
 
         case 'getProducto':
-            $id = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT);
+            $id       = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT);
             $response = $productosAdmin
                 ? $productosAdmin->obtenerPorId($id)
                 : ['success' => false, 'message' => 'Módulo no disponible'];
@@ -300,14 +307,14 @@ try {
             break;
 
         case 'actualizarProducto':
-            $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
+            $id       = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
             $response = $productosAdmin
                 ? $productosAdmin->actualizar($id, $_POST)
                 : ['success' => false, 'message' => 'Módulo no disponible'];
             break;
 
         case 'eliminarProducto':
-            $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
+            $id       = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
             $response = $productosAdmin
                 ? $productosAdmin->eliminar($id)
                 : ['success' => false, 'message' => 'Módulo no disponible'];
@@ -359,6 +366,61 @@ try {
             if (!empty($response['importados'])) {
                 array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
             }
+            break;
+
+        // ── Inventario ────────────────────────────────────────────────────────
+        case 'getResumenInventario':
+            $response = $inventario->getResumen();
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'getAlertasInventario':
+            $response = $inventario->getAlertas();
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'getMovimientosInventario':
+            $producto_id  = filter_var($_GET['producto_id']  ?? null, FILTER_VALIDATE_INT) ?: null;
+            $tipo         = $_GET['tipo']         ?? null;
+            $subtipo      = $_GET['subtipo']      ?? null;
+            $fecha_inicio = isset($_GET['fecha_inicio']) ? sanitize($_GET['fecha_inicio']) : null;
+            $fecha_fin    = isset($_GET['fecha_fin'])    ? sanitize($_GET['fecha_fin'])    : null;
+            $limite       = filter_var($_GET['limite'] ?? 100, FILTER_VALIDATE_INT) ?: 100;
+            $response     = $inventario->getMovimientos($producto_id, $tipo, $subtipo, $fecha_inicio, $fecha_fin, $limite);
+            break;
+
+        case 'getProductosMasVendidos':
+            $periodo  = in_array($_GET['periodo'] ?? '', ['semana','mes','año']) ? $_GET['periodo'] : 'semana';
+            $response = $inventario->getMasVendidos($periodo);
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'getProductosMenosVendidos':
+            $periodo  = in_array($_GET['periodo'] ?? '', ['semana','mes','año']) ? $_GET['periodo'] : 'semana';
+            $response = $inventario->getMenosVendidos($periodo);
+            if ($metodo === 'GET') cacheResponse($response, $cache_file);
+            break;
+
+        case 'registrarEntradaMercancia':
+            $producto_id = filter_var($_POST['producto_id'] ?? 0, FILTER_VALIDATE_INT);
+            $cantidad    = filter_var($_POST['cantidad']    ?? 0, FILTER_VALIDATE_INT);
+            $subtipo     = sanitize($_POST['subtipo']       ?? '');
+            $notas       = isset($_POST['notas']) ? substr(sanitize($_POST['notas']), 0, 500) : '';
+            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'Producto inválido']; break; }
+            if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
+            $response = $inventario->registrarEntrada($producto_id, $cantidad, $subtipo, $notas);
+            array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
+            break;
+
+        case 'registrarAjusteInventario':
+            $producto_id = filter_var($_POST['producto_id'] ?? 0, FILTER_VALIDATE_INT);
+            $cantidad    = filter_var($_POST['cantidad']    ?? 0, FILTER_VALIDATE_INT);
+            $subtipo     = sanitize($_POST['subtipo']       ?? '');
+            $notas       = isset($_POST['notas']) ? substr(sanitize($_POST['notas']), 0, 500) : '';
+            if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'Producto inválido']; break; }
+            if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
+            $response = $inventario->registrarAjuste($producto_id, $cantidad, $subtipo, $notas);
+            array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
             break;
 
         default:
