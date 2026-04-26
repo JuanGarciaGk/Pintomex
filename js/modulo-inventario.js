@@ -7,6 +7,7 @@ class ModuloInventario {
         this.periodoTendencia = 'semana';
         this.productos = [];
         this.cargando = false;
+        this.cacheTendencias = new Map();
     }
 
     async init() {
@@ -139,9 +140,6 @@ class ModuloInventario {
             if (!data.success) throw new Error(data.message);
 
             const r = data.resumen;
-            const movHoy = parseInt(r.movimientos_hoy) || 0;
-            const entSemana = parseInt(r.entradas_semana) || 0;
-            const salSemana = parseInt(r.salidas_semana) || 0;
 
             contenedor.innerHTML = `
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-bottom:2.5rem;">
@@ -382,6 +380,7 @@ class ModuloInventario {
 
     async cargarTendencias(periodo = null) {
         if (periodo) this.periodoTendencia = periodo;
+        
         const contenedor = document.getElementById('invTabContenido');
         contenedor.innerHTML = `
             <div style="display:flex;align-items:center;justify-content:center;gap:1.2rem;margin-bottom:2rem;flex-wrap:wrap;">
@@ -395,59 +394,77 @@ class ModuloInventario {
         contenedor.querySelectorAll('.btn-periodo').forEach(btn => {
             btn.addEventListener('click', () => this.cargarTendencias(btn.dataset.periodo));
         });
-        await this.cargarTendenciasTabla();
+        
+        this.cargarTendenciasTabla();
     }
 
     async cargarTendenciasTabla() {
         const wrap = document.getElementById('tendenciasContenido');
         if (!wrap) return;
+        
+        const cacheKey = `tendencias_${this.periodoTendencia}`;
+        const cacheData = this.cacheTendencias.get(cacheKey);
+        
+        if (cacheData && (Date.now() - cacheData.timestamp) < 60000) {
+            this.renderizarTendencias(wrap, cacheData.dataMas, cacheData.dataMenos);
+            return;
+        }
+        
         try {
             const [resMas, resMenos] = await Promise.all([
                 fetch(`${this.apiUrl}?accion=getProductosMasVendidos&periodo=${this.periodoTendencia}&_t=${Date.now()}`),
                 fetch(`${this.apiUrl}?accion=getProductosMenosVendidos&periodo=${this.periodoTendencia}&_t=${Date.now()}`)
             ]);
+            
             const [dataMas, dataMenos] = await Promise.all([resMas.json(), resMenos.json()]);
-
-            const renderLista = (productos, esMas) => {
-                if (!productos || productos.length === 0) return '<div style="padding:2rem;text-align:center;color:var(--gray);font-size:1rem;">No hay datos suficientes para este período.</div>';
-                const maxVendido = parseInt(productos[0]?.total_vendido) || 1;
-                return productos.map((p, i) => {
-                    const vendido = parseInt(p.total_vendido) || 0;
-                    const porcentaje = esMas ? Math.round((vendido / maxVendido) * 100) : 0;
-                    return `
-                        <div style="display:flex;align-items:center;padding:1rem 1.5rem;border-bottom:1px solid var(--light);gap:1.2rem;">
-                            <div style="width:38px;height:38px;background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.95rem;font-weight:bold;box-shadow:var(--shadow-sm);">${i + 1}</div>
-                            <div style="flex:1;min-width:0;">
-                                <div style="font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escapeHTML(p.nombre)}</div>
-                                <div style="font-size:0.85rem;color:var(--gray);margin-top:0.25rem;">${this.escapeHTML(p.categoria)}</div>
-                                ${esMas ? `<div style="height:8px;background:var(--light);border-radius:4px;margin-top:0.6rem;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#e74c3c,#f39c12);border-radius:4px;width:${porcentaje}%;"></div></div>` : ''}
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:1.5rem;font-weight:800;color:var(--primary);">${vendido}</div>
-                                <div style="font-size:0.8rem;color:var(--gray);">unidades</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            };
-
-            wrap.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:2rem;">
-                    <div style="background:white;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--light);box-shadow:var(--shadow-md);">
-                        <div style="padding:1.2rem 1.5rem;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;font-weight:700;font-size:1.1rem;"><i class="fas fa-trophy" style="margin-right:0.6rem;"></i> Productos Más Vendidos</div>
-                        ${renderLista(dataMas.productos, true)}
-                    </div>
-                    <div style="background:white;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--light);box-shadow:var(--shadow-md);">
-                        <div style="padding:1.2rem 1.5rem;background:linear-gradient(135deg,#3498db,#1a5276);color:white;font-weight:700;font-size:1.1rem;"><i class="fas fa-arrow-down" style="margin-right:0.6rem;"></i> Productos Menos Vendidos</div>
-                        ${renderLista(dataMenos.productos, false)}
-                    </div>
-                </div>
-                <div style="margin-top:1.5rem;padding:1rem;text-align:center;background:#f8fafc;border-radius:var(--radius-md);font-size:0.85rem;color:var(--gray);">
-                    <i class="fas fa-chart-line"></i> Datos basados en el período seleccionado
-                </div>`;
+            
+            this.cacheTendencias.set(cacheKey, {
+                dataMas: dataMas,
+                dataMenos: dataMenos,
+                timestamp: Date.now()
+            });
+            
+            this.renderizarTendencias(wrap, dataMas, dataMenos);
         } catch (e) {
             wrap.innerHTML = `<div style="padding:1.5rem;background:#fff5f5;border-left:5px solid var(--danger);border-radius:var(--radius-md);color:var(--danger);font-size:1rem;">Error al cargar los datos de tendencias.</div>`;
         }
+    }
+    
+    renderizarTendencias(wrap, dataMas, dataMenos) {
+        const renderLista = (productos, esMas) => {
+            if (!productos || productos.length === 0) return '<div style="padding:2rem;text-align:center;color:var(--gray);font-size:1rem;">No hay datos suficientes para este período.</div>';
+            const maxVendido = parseInt(productos[0]?.total_vendido) || 1;
+            return productos.map((p, i) => {
+                const vendido = parseInt(p.total_vendido) || 0;
+                const porcentaje = esMas ? Math.round((vendido / maxVendido) * 100) : 0;
+                return `
+                    <div style="display:flex;align-items:center;padding:0.8rem 1.2rem;border-bottom:1px solid var(--light);gap:1rem;">
+                        <div style="width:32px;height:32px;background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:bold;flex-shrink:0;">${i + 1}</div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escapeHTML(p.nombre)}</div>
+                            <div style="font-size:0.75rem;color:var(--gray);margin-top:0.2rem;">${this.escapeHTML(p.categoria)}</div>
+                            ${esMas ? `<div style="height:4px;background:var(--light);border-radius:4px;margin-top:0.5rem;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#e74c3c,#f39c12);border-radius:4px;width:${porcentaje}%;"></div></div>` : ''}
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-size:1.2rem;font-weight:700;color:var(--primary);">${vendido}</div>
+                            <div style="font-size:0.7rem;color:var(--gray);">unidades</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        wrap.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.5rem;">
+                <div style="background:white;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--light);box-shadow:var(--shadow-sm);">
+                    <div style="padding:0.8rem 1.2rem;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;font-weight:600;font-size:1rem;"><i class="fas fa-trophy" style="margin-right:0.5rem;"></i> Productos Más Vendidos</div>
+                    ${renderLista(dataMas.productos, true)}
+                </div>
+                <div style="background:white;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--light);box-shadow:var(--shadow-sm);">
+                    <div style="padding:0.8rem 1.2rem;background:linear-gradient(135deg,#3498db,#1a5276);color:white;font-weight:600;font-size:1rem;"><i class="fas fa-arrow-down" style="margin-right:0.5rem;"></i> Productos Menos Vendidos</div>
+                    ${renderLista(dataMenos.productos, false)}
+                </div>
+            </div>`;
     }
 
     mostrarModalEntrada(preseleccionId = null, preseleccionNombre = '') {
@@ -485,7 +502,6 @@ class ModuloInventario {
                         <label style="display:block;font-weight:700;color:var(--primary);margin-bottom:0.5rem;font-size:0.95rem;">Tipo de Entrada *</label>
                         <select id="entTipo" required style="width:100%;padding:0.9rem 1rem;border:2px solid var(--light);border-radius:var(--radius-md);font-size:1rem;">
                             <option value="compra">🛒 Compra de Mercancía</option>
-                            <option value="devolucion_cliente">↩️ Devolución de Cliente</option>
                         </select>
                     </div>
                     <div style="margin-bottom:1.2rem;">
@@ -524,6 +540,13 @@ class ModuloInventario {
         if (!prodId) { this.mostrarNotificacion('Seleccione un producto', 'warning'); return; }
         if (!cantidad || parseInt(cantidad) <= 0) { this.mostrarNotificacion('Ingrese una cantidad válida', 'warning'); return; }
 
+        const btnSubmit = document.querySelector('#formEntradaInv button[type="submit"]');
+        const textoOriginal = btnSubmit?.innerHTML;
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        }
+
         try {
             const fd = new FormData();
             fd.append('accion', 'registrarEntradaMercancia');
@@ -531,7 +554,8 @@ class ModuloInventario {
             fd.append('subtipo', subtipo);
             fd.append('cantidad', cantidad);
             fd.append('notas', notas);
-            fd.append('csrf_token', await this.obtenerCsrfToken());
+            const csrfToken = await this.obtenerCsrfToken();
+            fd.append('csrf_token', csrfToken);
 
             const res = await fetch(this.apiUrl, { method: 'POST', body: fd });
             const data = await res.json();
@@ -539,14 +563,44 @@ class ModuloInventario {
             if (data.success) {
                 this.cerrarModalActual();
                 this.mostrarNotificacion('✅ ' + data.message, 'success');
+                
+                const productoActualizado = this.productos.find(p => p.id == prodId);
+                if (productoActualizado) {
+                    productoActualizado.stock_actual = data.stock_nuevo;
+                }
+                
                 await this.cargarListaProductos();
-                this.cambiarTab(this.tabActiva);
+                
+                this.cacheTendencias.clear();
+                
+                if (this.tabActiva === 'resumen') {
+                    await this.cargarResumen();
+                } else if (this.tabActiva === 'alertas') {
+                    await this.cargarAlertas();
+                } else if (this.tabActiva === 'tendencias') {
+                    await this.cargarTendencias(this.periodoTendencia);
+                }
+                
                 window.dispatchEvent(new CustomEvent('productos-actualizados'));
+                window.dispatchEvent(new CustomEvent('inventario-actualizado'));
+                
+                if (window.pos) {
+                    window.pos.recargarProductos();
+                }
+                if (window.moduloProductos) {
+                    window.moduloProductos.cargarProductos();
+                }
             } else {
                 this.mostrarNotificacion('❌ ' + (data.message || 'Error al registrar'), 'error');
             }
         } catch (e) {
+            console.error('Error en procesarEntrada:', e);
             this.mostrarNotificacion('Error de conexión: ' + e.message, 'error');
+        } finally {
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = textoOriginal;
+            }
         }
     }
 
@@ -630,6 +684,13 @@ class ModuloInventario {
         if (!cantidad || parseInt(cantidad) <= 0) { this.mostrarNotificacion('Ingrese una cantidad válida', 'warning'); return; }
         if (!notas) { this.mostrarNotificacion('La justificación es obligatoria', 'warning'); return; }
 
+        const btnSubmit = document.querySelector('#formAjusteInv button[type="submit"]');
+        const textoOriginal = btnSubmit?.innerHTML;
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        }
+
         try {
             const fd = new FormData();
             fd.append('accion', 'registrarAjusteInventario');
@@ -637,7 +698,8 @@ class ModuloInventario {
             fd.append('subtipo', subtipo);
             fd.append('cantidad', cantidad);
             fd.append('notas', notas);
-            fd.append('csrf_token', await this.obtenerCsrfToken());
+            const csrfToken = await this.obtenerCsrfToken();
+            fd.append('csrf_token', csrfToken);
 
             const res = await fetch(this.apiUrl, { method: 'POST', body: fd });
             const data = await res.json();
@@ -645,14 +707,44 @@ class ModuloInventario {
             if (data.success) {
                 this.cerrarModalActual();
                 this.mostrarNotificacion('✅ ' + data.message, 'success');
+                
+                const productoActualizado = this.productos.find(p => p.id == prodId);
+                if (productoActualizado) {
+                    productoActualizado.stock_actual = data.stock_nuevo;
+                }
+                
                 await this.cargarListaProductos();
-                this.cambiarTab(this.tabActiva);
+                
+                this.cacheTendencias.clear();
+                
+                if (this.tabActiva === 'resumen') {
+                    await this.cargarResumen();
+                } else if (this.tabActiva === 'alertas') {
+                    await this.cargarAlertas();
+                } else if (this.tabActiva === 'tendencias') {
+                    await this.cargarTendencias(this.periodoTendencia);
+                }
+                
                 window.dispatchEvent(new CustomEvent('productos-actualizados'));
+                window.dispatchEvent(new CustomEvent('inventario-actualizado'));
+                
+                if (window.pos) {
+                    window.pos.recargarProductos();
+                }
+                if (window.moduloProductos) {
+                    window.moduloProductos.cargarProductos();
+                }
             } else {
                 this.mostrarNotificacion('❌ ' + (data.message || 'Error al registrar ajuste'), 'error');
             }
         } catch (e) {
+            console.error('Error en procesarAjuste:', e);
             this.mostrarNotificacion('Error de conexión: ' + e.message, 'error');
+        } finally {
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = textoOriginal;
+            }
         }
     }
 
@@ -727,6 +819,7 @@ class ModuloInventario {
 
     destroy() {
         this.cerrarModalActual();
+        this.cacheTendencias.clear();
     }
 }
 

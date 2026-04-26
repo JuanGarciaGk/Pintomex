@@ -157,8 +157,14 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='productos' AND index_name='idx_productos_nombre') THEN
         ALTER TABLE productos ADD INDEX idx_productos_nombre (nombre);
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='productos' AND index_name='idx_productos_codigo') THEN
+        ALTER TABLE productos ADD INDEX idx_productos_codigo (codigo_barras);
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='productos' AND index_name='idx_productos_categoria') THEN
         ALTER TABLE productos ADD INDEX idx_productos_categoria (categoria);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='productos' AND index_name='idx_productos_stock') THEN
+        ALTER TABLE productos ADD INDEX idx_productos_stock (stock_actual);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='ventas' AND index_name='idx_ventas_fecha') THEN
         ALTER TABLE ventas ADD INDEX idx_ventas_fecha (fecha);

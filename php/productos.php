@@ -3,12 +3,14 @@ require_once 'config.php';
 
 class Productos {
     
+    private $cacheTtl = 300;
+    
     public function buscarPorCodigo($codigo) {
         global $conn;
         
         $codigo = substr($codigo, 0, 50);
         
-        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE codigo_barras = ?");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE codigo_barras = ? LIMIT 1");
         $stmt->bind_param("s", $codigo);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -81,6 +83,15 @@ class Productos {
     public function todos() {
         global $conn;
         
+        $cacheFile = sys_get_temp_dir() . '/pos_productos_cache.json';
+        
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $this->cacheTtl) {
+            $cached = file_get_contents($cacheFile);
+            if ($cached) {
+                return json_decode($cached, true);
+            }
+        }
+        
         $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos ORDER BY nombre");
         $stmt->execute();
         $result = $stmt->get_result();
@@ -90,6 +101,9 @@ class Productos {
             $productos[] = $row;
         }
         $stmt->close();
+        
+        file_put_contents($cacheFile, json_encode($productos, JSON_UNESCAPED_UNICODE));
+        
         return $productos;
     }
     
@@ -101,7 +115,7 @@ class Productos {
             return null;
         }
         
-        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE id = ?");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE id = ? LIMIT 1");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -118,7 +132,7 @@ class Productos {
     public function stockBajo() {
         global $conn;
         
-        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE stock_actual <= stock_minimo ORDER BY stock_actual ASC");
+        $stmt = $conn->prepare("SELECT id, codigo_barras, nombre, descripcion, categoria, precio, stock_minimo, stock_actual FROM productos WHERE stock_actual <= stock_minimo ORDER BY stock_actual ASC LIMIT 50");
         $stmt->execute();
         $result = $stmt->get_result();
         

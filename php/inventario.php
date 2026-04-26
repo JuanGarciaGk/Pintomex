@@ -12,7 +12,6 @@ class Inventario {
             $resumen['stock_bajo']       = (int)$conn->query("SELECT COUNT(*) FROM productos WHERE stock_actual <= stock_minimo AND stock_actual > 0")->fetch_row()[0];
             $resumen['sin_stock']        = (int)$conn->query("SELECT COUNT(*) FROM productos WHERE stock_actual = 0")->fetch_row()[0];
 
-            // movimientos de hoy — devuelve un escalar (total)
             $hoy = $conn->query("
                 SELECT
                     COUNT(*) AS total,
@@ -24,7 +23,6 @@ class Inventario {
 
             $resumen['movimientos_hoy'] = (int)($hoy['total'] ?? 0);
 
-            // entradas / salidas de los últimos 7 días
             $semana = $conn->query("
                 SELECT
                     COUNT(CASE WHEN tipo = 'entrada' THEN 1 END) AS entradas_semana,
@@ -42,14 +40,9 @@ class Inventario {
         }
     }
 
-    /**
-     * Devuelve productos con stock <= stock_minimo (sin depender de ninguna vista)
-     * y también los más/menos vendidos de los últimos 7 días.
-     */
     public function getAlertas() {
         global $conn;
         try {
-            // Productos con stock crítico o bajo
             $result = $conn->query("
                 SELECT id, codigo_barras, nombre, categoria, stock_actual, stock_minimo
                 FROM productos
@@ -69,7 +62,6 @@ class Inventario {
                 $alertas[] = $row;
             }
 
-            // Más vendidos — últimos 7 días
             $mas = $conn->query("
                 SELECT p.id, p.nombre, p.categoria, p.stock_actual,
                     COALESCE(SUM(dv.cantidad), 0) AS total_vendido,
@@ -83,7 +75,6 @@ class Inventario {
                 ORDER BY total_vendido DESC
                 LIMIT 5")->fetch_all(MYSQLI_ASSOC);
 
-            // Menos vendidos — últimos 7 días (solo los que tuvieron al menos 1 venta)
             $menos = $conn->query("
                 SELECT p.id, p.nombre, p.categoria, p.stock_actual,
                     COALESCE(SUM(dv.cantidad), 0) AS total_vendido,
@@ -225,7 +216,7 @@ class Inventario {
         try {
             $producto_id = filter_var($producto_id, FILTER_VALIDATE_INT);
             $cantidad    = filter_var($cantidad,    FILTER_VALIDATE_INT);
-            $subtipos    = ['compra', 'devolucion_cliente'];
+            $subtipos    = ['compra'];
 
             if (!$producto_id || $producto_id <= 0) return ['success' => false, 'message' => 'ID de producto inválido'];
             if (!$cantidad    || $cantidad    <= 0) return ['success' => false, 'message' => 'Cantidad inválida'];
@@ -233,8 +224,9 @@ class Inventario {
             if (!in_array($subtipo, $subtipos))     return ['success' => false, 'message' => 'Subtipo inválido'];
 
             $notas = substr(trim($notas), 0, 500);
+            if (empty($notas)) $notas = 'Sin notas adicionales';
 
-            $stmt = $conn->prepare("SELECT id, nombre, stock_actual FROM productos WHERE id = ?");
+            $stmt = $conn->prepare("SELECT id, nombre, stock_actual FROM productos WHERE id = ? LIMIT 1");
             $stmt->bind_param("i", $producto_id);
             $stmt->execute();
             $producto = $stmt->get_result()->fetch_assoc();
@@ -243,7 +235,7 @@ class Inventario {
 
             $stock_anterior = (int)$producto['stock_actual'];
             $stock_nuevo    = $stock_anterior + $cantidad;
-            $justificacion  = $subtipo === 'compra' ? 'Compra de mercancía' : 'Devolución de cliente';
+            $justificacion  = 'Compra de mercancía';
 
             $conn->begin_transaction();
 
@@ -253,11 +245,13 @@ class Inventario {
             $stmt->close();
 
             $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, subtipo, cantidad, stock_anterior, stock_nuevo, justificacion, notas) VALUES (?, 'entrada', ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("isiiiiss", $producto_id, $subtipo, $cantidad, $stock_anterior, $stock_nuevo, $justificacion, $notas);
+            $stmt->bind_param("isiiiss", $producto_id, $subtipo, $cantidad, $stock_anterior, $stock_nuevo, $justificacion, $notas);
             $stmt->execute();
             $stmt->close();
 
             $conn->commit();
+            
+            $this->limpiarCacheCompleta();
 
             return [
                 'success'         => true,
@@ -287,7 +281,7 @@ class Inventario {
 
             $notas = substr(trim($notas), 0, 500);
 
-            $stmt = $conn->prepare("SELECT id, nombre, stock_actual FROM productos WHERE id = ?");
+            $stmt = $conn->prepare("SELECT id, nombre, stock_actual FROM productos WHERE id = ? LIMIT 1");
             $stmt->bind_param("i", $producto_id);
             $stmt->execute();
             $producto = $stmt->get_result()->fetch_assoc();
@@ -311,11 +305,13 @@ class Inventario {
             $stmt->close();
 
             $stmt = $conn->prepare("INSERT INTO movimientos_inventario (producto_id, tipo, subtipo, cantidad, stock_anterior, stock_nuevo, justificacion, notas) VALUES (?, 'ajuste', ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("isiiiiss", $producto_id, $subtipo, $cantidad, $stock_anterior, $stock_nuevo, $justificacion, $notas);
+            $stmt->bind_param("isiiiss", $producto_id, $subtipo, $cantidad, $stock_anterior, $stock_nuevo, $justificacion, $notas);
             $stmt->execute();
             $stmt->close();
 
             $conn->commit();
+            
+            $this->limpiarCacheCompleta();
 
             return [
                 'success'         => true,
@@ -329,6 +325,21 @@ class Inventario {
             error_log("Error en registrarAjuste: " . $e->getMessage());
             return ['success' => false, 'message' => 'Error al registrar ajuste: ' . $e->getMessage()];
         }
+    }
+    
+    private function limpiarCacheCompleta() {
+        $cacheFiles = [
+            sys_get_temp_dir() . '/pos_productos_cache.json',
+            sys_get_temp_dir() . '/pos_productos_admin_cache.json',
+            sys_get_temp_dir() . '/pos_resumen_inventario_cache.json',
+            sys_get_temp_dir() . '/pos_alertas_inventario_cache.json'
+        ];
+        foreach ($cacheFiles as $file) {
+            if (file_exists($file)) {
+                @unlink($file);
+            }
+        }
+        array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
     }
 }
 ?>

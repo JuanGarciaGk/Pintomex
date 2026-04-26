@@ -102,11 +102,11 @@ if ($metodo === 'POST' && in_array($accion, [
 }
 
 $cache_ttl = [
-    'getProductos'              => 300,
-    'getProductosPorCategoria'  => 300,
+    'getProductos'              => 60,
+    'getProductosPorCategoria'  => 60,
     'getEstadoCaja'             => 30,
-    'getCarrito'                => 10,
-    'getProductosAdmin'         => 300,
+    'getCarrito'                => 5,
+    'getProductosAdmin'         => 60,
     'getProductosEstadisticas'  => 60,
     'getCategoriasConConteo'    => 300,
     'getResumenInventario'      => 60,
@@ -143,7 +143,6 @@ try {
 
         case 'getProductos':
             $response = $productos->todos();
-            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'buscarProductos':
@@ -368,7 +367,6 @@ try {
             }
             break;
 
-        // ── Inventario ────────────────────────────────────────────────────────
         case 'getResumenInventario':
             $response = $inventario->getResumen();
             if ($metodo === 'GET') cacheResponse($response, $cache_file);
@@ -410,6 +408,15 @@ try {
             if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
             $response = $inventario->registrarEntrada($producto_id, $cantidad, $subtipo, $notas);
             array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
+            $cacheFiles = [
+                sys_get_temp_dir() . '/pos_productos_cache.json',
+                sys_get_temp_dir() . '/pos_productos_admin_cache.json',
+                sys_get_temp_dir() . '/pos_resumen_inventario_cache.json',
+                sys_get_temp_dir() . '/pos_alertas_inventario_cache.json'
+            ];
+            foreach ($cacheFiles as $file) {
+                if (file_exists($file)) @unlink($file);
+            }
             break;
 
         case 'registrarAjusteInventario':
@@ -421,6 +428,15 @@ try {
             if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
             $response = $inventario->registrarAjuste($producto_id, $cantidad, $subtipo, $notas);
             array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
+            $cacheFiles = [
+                sys_get_temp_dir() . '/pos_productos_cache.json',
+                sys_get_temp_dir() . '/pos_productos_admin_cache.json',
+                sys_get_temp_dir() . '/pos_resumen_inventario_cache.json',
+                sys_get_temp_dir() . '/pos_alertas_inventario_cache.json'
+            ];
+            foreach ($cacheFiles as $file) {
+                if (file_exists($file)) @unlink($file);
+            }
             break;
 
         default:
