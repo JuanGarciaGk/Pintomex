@@ -80,12 +80,12 @@ class Productos {
         return $productos;
     }
     
-    public function todos() {
+    public function todos($forceRefresh = false) {
         global $conn;
         
         $cacheFile = sys_get_temp_dir() . '/pos_productos_cache.json';
         
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $this->cacheTtl) {
+        if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $this->cacheTtl) {
             $cached = file_get_contents($cacheFile);
             if ($cached) {
                 return json_decode($cached, true);

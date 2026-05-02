@@ -40,11 +40,12 @@ class ModuloProductos {
         if (toggleCarrito) toggleCarrito.style.display = '';
     }
 
-    async cargarProductos() {
+    async cargarProductos(forceRefresh = false) {
         if (this.cargando) return;
         this.cargando = true;
         try {
-            const response = await fetch(`${this.apiUrl}?accion=getProductosAdmin&_t=${Date.now()}`);
+            const url = `${this.apiUrl}?accion=getProductosAdmin&_t=${Date.now()}`;
+            const response = await fetch(url);
             const data = await response.json();
             if (data.success) {
                 this.productos = data.productos;
@@ -162,9 +163,8 @@ class ModuloProductos {
                 </div>
             </div>`;
 
-        // FIX: uso de optional chaining para evitar null.addEventListener
         container.querySelector('#statStockBajo')?.addEventListener('click', () => this.aplicarFiltroStock('bajo'));
-        container.querySelector('#statSinStock')?.addEventListener('click',  () => this.aplicarFiltroStock('sin_stock'));
+        container.querySelector('#statSinStock')?.addEventListener('click', () => this.aplicarFiltroStock('sin_stock'));
     }
 
     renderizarTabla(lista = null) {
@@ -173,7 +173,6 @@ class ModuloProductos {
 
         const productos = lista !== null ? lista : this.productos;
 
-        // FIX: uso de optional chaining para tableContainer
         const tableContainer = container.closest('.productos-tabla-container');
         const bannerExistente = tableContainer?.querySelector('.filtro-stock-banner');
         if (bannerExistente) bannerExistente.remove();
@@ -190,7 +189,6 @@ class ModuloProductos {
                 <button class="btn-quitar-filtro-stock">Quitar filtro</button>`;
             tableContainer.insertBefore(banner, tableContainer.firstChild);
 
-            // FIX: optional chaining para evitar null.addEventListener
             banner.querySelector('.btn-quitar-filtro-stock')?.addEventListener('click', () => this.aplicarFiltroStock(this.filtroStock));
         }
 
@@ -209,7 +207,6 @@ class ModuloProductos {
                     </td>
                 </tr>`;
             if (!this.filtroStock) {
-                // FIX: optional chaining para evitar null.addEventListener
                 container.querySelector('.btn-agregar-producto')?.addEventListener('click', () => this.mostrarModalFormulario());
             }
             return;
@@ -333,15 +330,14 @@ class ModuloProductos {
         this.modalActual = modal;
         document.body.appendChild(modal);
 
-        // FIX: null checks antes de addEventListener
         const cerrarBtn = modal.querySelector('.cerrar-modal');
         const cancelarBtn = modal.querySelector('.btn-cancelar');
         const form = modal.querySelector('#productoForm');
         const codigoInput = modal.querySelector('#codigo_barras');
 
-        if (cerrarBtn)  cerrarBtn.addEventListener('click',  () => this.cerrarModalActual());
+        if (cerrarBtn) cerrarBtn.addEventListener('click', () => this.cerrarModalActual());
         if (cancelarBtn) cancelarBtn.addEventListener('click', () => this.cerrarModalActual());
-        if (form)        form.addEventListener('submit', e => { e.preventDefault(); this.guardarProducto(); });
+        if (form) form.addEventListener('submit', e => { e.preventDefault(); this.guardarProducto(); });
         if (codigoInput) codigoInput.focus();
     }
 
@@ -358,7 +354,7 @@ class ModuloProductos {
             stock_actual:  parseInt(form.querySelector('#stock_actual')?.value  || 0) || 0
         };
         if (!datos.codigo_barras) { this.mostrarNotificacion('El código de barras es requerido', 'warning'); return; }
-        if (!datos.nombre)        { this.mostrarNotificacion('El nombre es requerido', 'warning'); return; }
+        if (!datos.nombre) { this.mostrarNotificacion('El nombre es requerido', 'warning'); return; }
         if (isNaN(datos.precio) || datos.precio < 0) { this.mostrarNotificacion('El precio debe ser un valor válido', 'warning'); return; }
         try {
             const formData = new FormData();
@@ -372,7 +368,7 @@ class ModuloProductos {
                 this.cerrarModalActual();
                 this.mostrarNotificacion(data.message, 'success');
                 this.filtroStock = null;
-                await this.cargarProductos();
+                await this.cargarProductos(true);
                 if (window.pos?.cache) window.pos.cache.delete(window.pos.apiUrl + '?accion=getProductos');
                 this.notificarActualizacionProductos();
                 const terminoInput    = document.getElementById('buscarProductoInput');
@@ -406,7 +402,7 @@ class ModuloProductos {
             if (data.success) {
                 this.mostrarNotificacion(data.message, 'success');
                 this.filtroStock = null;
-                await this.cargarProductos();
+                await this.cargarProductos(true);
                 if (window.pos?.cache) window.pos.cache.delete(window.pos.apiUrl + '?accion=getProductos');
                 this.notificarActualizacionProductos();
             } else {
@@ -451,8 +447,7 @@ class ModuloProductos {
                 <div id="ticketResultado"></div>
             </div>`;
 
-        // FIX: null checks para todos los elementos del ticket
-        const folioInput      = container.querySelector('#folioInput');
+        const folioInput = container.querySelector('#folioInput');
         const btnBuscarTicket = container.querySelector('#btnBuscarTicket');
 
         if (folioInput) {
@@ -488,7 +483,7 @@ class ModuloProductos {
                 return;
             }
             if (data.unico) { this.renderizarTicketEncontrado(data.venta, data.detalles); }
-            else            { this.renderizarListaTickets(data.ventas); }
+            else { this.renderizarListaTickets(data.ventas); }
         } catch (error) {
             console.error('Error buscando ticket:', error);
             resultado.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--danger);"><i class="fas fa-exclamation-circle" style="font-size:2rem;"></i><p style="margin-top:.8rem;">Error de conexión. Intente de nuevo.</p></div>`;
@@ -618,10 +613,9 @@ class ModuloProductos {
                 </div>`}
             </div>`;
 
-        // FIX: null checks para todos los elementos del resultado
-        const motivoTA          = resultado.querySelector('#motivoCancelacion');
-        const btnConfirmar      = resultado.querySelector('#btnConfirmarCancelacion');
-        const btnDescartar      = resultado.querySelector('#btnDescartarBusqueda');
+        const motivoTA = resultado.querySelector('#motivoCancelacion');
+        const btnConfirmar = resultado.querySelector('#btnConfirmarCancelacion');
+        const btnDescartar = resultado.querySelector('#btnDescartarBusqueda');
 
         if (motivoTA) {
             motivoTA.addEventListener('focus', () => {
@@ -656,9 +650,9 @@ class ModuloProductos {
         if (btnConfirmar) { btnConfirmar.disabled = true; btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...'; }
         try {
             const formData = new FormData();
-            formData.append('accion',     'cancelarVenta');
-            formData.append('folio',      folio);
-            formData.append('motivo',     motivo);
+            formData.append('accion', 'cancelarVenta');
+            formData.append('folio', folio);
+            formData.append('motivo', motivo);
             formData.append('csrf_token', await this.obtenerCsrfToken());
             const response = await fetch(this.apiUrl, { method: 'POST', body: formData });
             const data = await response.json();
@@ -676,7 +670,6 @@ class ModuloProductos {
                             </button>
                         </div>`;
 
-                    // FIX: null check antes de addEventListener
                     const btnNueva = resultado.querySelector('#btnNuevaBusqueda');
                     if (btnNueva) {
                         btnNueva.addEventListener('click', () => {
@@ -687,7 +680,7 @@ class ModuloProductos {
                     }
                 }
                 this.mostrarNotificacion('✅ ' + data.message, 'success');
-                await this.cargarProductos();
+                await this.cargarProductos(true);
                 this.notificarActualizacionProductos();
             } else {
                 this.mostrarNotificacion(data.message || 'Error al cancelar', 'error');
@@ -734,31 +727,29 @@ class ModuloProductos {
         document.body.appendChild(modal);
         this._initDropZone(modal);
 
-        // FIX: null checks antes de addEventListener
-        const cerrarBtn   = modal.querySelector('.cerrar-modal');
+        const cerrarBtn = modal.querySelector('.cerrar-modal');
         const cancelarBtn = modal.querySelector('#btnCancelarImportacion');
         const importarBtn = modal.querySelector('#btnIniciarImportacion');
 
-        if (cerrarBtn)   cerrarBtn.addEventListener('click',   () => this.cerrarModalActual());
+        if (cerrarBtn) cerrarBtn.addEventListener('click', () => this.cerrarModalActual());
         if (cancelarBtn) cancelarBtn.addEventListener('click', () => this.cerrarModalActual());
         if (importarBtn) importarBtn.addEventListener('click', () => this.procesarImportacion());
     }
 
     _initDropZone(modal) {
-        const dropZone  = modal.querySelector('#dropZone');
+        const dropZone = modal.querySelector('#dropZone');
         const fileInput = modal.querySelector('#archivoExcel');
-        const btnSel    = modal.querySelector('#btnSeleccionarArchivo');
-        const nombreEl  = modal.querySelector('#archivoNombre');
+        const btnSel = modal.querySelector('#btnSeleccionarArchivo');
+        const nombreEl = modal.querySelector('#archivoNombre');
         const btnImport = modal.querySelector('#btnIniciarImportacion');
 
-        // FIX: verificar que todos los elementos existen antes de usar
         if (!dropZone || !fileInput || !btnSel || !nombreEl || !btnImport) return;
 
         btnSel.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', () => {
             if (fileInput.files[0]) this._setArchivoSeleccionado(fileInput.files[0], nombreEl, btnImport);
         });
-        dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
         dropZone.addEventListener('drop', e => {
             e.preventDefault();
@@ -784,15 +775,15 @@ class ModuloProductos {
         if (resultado) resultado.style.display = 'none';
         try {
             const formData = new FormData();
-            formData.append('accion',      'importarProductosExcel');
-            formData.append('archivo',     fileInput.files[0]);
-            formData.append('csrf_token',  await this.obtenerCsrfToken());
+            formData.append('accion', 'importarProductosExcel');
+            formData.append('archivo', fileInput.files[0]);
+            formData.append('csrf_token', await this.obtenerCsrfToken());
             const response = await fetch(this.apiUrl, { method: 'POST', body: formData });
             const data = await response.json();
             if (resultado) { resultado.style.display = 'block'; resultado.innerHTML = this._renderResultadoImportacion(data); }
             if (data.success && data.importados > 0) {
                 this.mostrarNotificacion(`✅ ${data.importados} producto(s) importados`, 'success');
-                await this.cargarProductos();
+                await this.cargarProductos(true);
                 this.notificarActualizacionProductos();
             } else if (!data.success) {
                 this.mostrarNotificacion(data.message || 'Error al importar', 'error');
@@ -894,9 +885,9 @@ class ModuloProductos {
         }
 
         const tabProductos = document.getElementById('tabProductos');
-        const tabCancelar  = document.getElementById('tabCancelarTicket');
+        const tabCancelar = document.getElementById('tabCancelarTicket');
         if (tabProductos) tabProductos.addEventListener('click', () => this.cambiarTab('productos'));
-        if (tabCancelar)  tabCancelar.addEventListener('click',  () => this.cambiarTab('cancelar'));
+        if (tabCancelar) tabCancelar.addEventListener('click', () => this.cambiarTab('cancelar'));
 
         document.querySelectorAll('.menu-item[data-modulo="productos"]').forEach(item => {
             item.removeEventListener('click', this.menuClickHandler);
@@ -907,20 +898,20 @@ class ModuloProductos {
 
     cambiarTab(tab) {
         this.tabActiva = tab;
-        const tabProductos     = document.getElementById('tabProductos');
-        const tabCancelar      = document.getElementById('tabCancelarTicket');
+        const tabProductos = document.getElementById('tabProductos');
+        const tabCancelar = document.getElementById('tabCancelarTicket');
         const contentProductos = document.getElementById('productosContent');
-        const contentCancelar  = document.getElementById('cancelarTicketContent');
+        const contentCancelar = document.getElementById('cancelarTicketContent');
         if (tab === 'productos') {
             if (tabProductos) { tabProductos.style.color = 'var(--primary)'; tabProductos.style.borderBottomColor = 'var(--secondary)'; }
-            if (tabCancelar)  { tabCancelar.style.color  = 'var(--gray)';    tabCancelar.style.borderBottomColor  = 'transparent'; }
+            if (tabCancelar) { tabCancelar.style.color = 'var(--gray)'; tabCancelar.style.borderBottomColor = 'transparent'; }
             if (contentProductos) contentProductos.style.display = 'block';
-            if (contentCancelar)  contentCancelar.style.display  = 'none';
+            if (contentCancelar) contentCancelar.style.display = 'none';
         } else {
-            if (tabCancelar)  { tabCancelar.style.color  = 'var(--primary)'; tabCancelar.style.borderBottomColor  = 'var(--secondary)'; }
-            if (tabProductos) { tabProductos.style.color = 'var(--gray)';    tabProductos.style.borderBottomColor = 'transparent'; }
+            if (tabCancelar) { tabCancelar.style.color = 'var(--primary)'; tabCancelar.style.borderBottomColor = 'var(--secondary)'; }
+            if (tabProductos) { tabProductos.style.color = 'var(--gray)'; tabProductos.style.borderBottomColor = 'transparent'; }
             if (contentProductos) contentProductos.style.display = 'none';
-            if (contentCancelar)  contentCancelar.style.display  = 'block';
+            if (contentCancelar) contentCancelar.style.display = 'block';
             this.renderizarCancelarTicket();
         }
     }
@@ -929,7 +920,6 @@ class ModuloProductos {
         document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');
         this._ocultarCarrito();
 
-        // FIX: verificar que .contenido-principal existe antes de operar
         const contenidoPrincipal = document.querySelector('.contenido-principal');
         if (!contenidoPrincipal) {
             console.error('No se encontró .contenido-principal en el DOM');
@@ -939,7 +929,7 @@ class ModuloProductos {
         let moduloProductos = document.getElementById('moduloProductos');
         if (!moduloProductos) {
             moduloProductos = document.createElement('section');
-            moduloProductos.id        = 'moduloProductos';
+            moduloProductos.id = 'moduloProductos';
             moduloProductos.className = 'modulo-productos';
             moduloProductos.innerHTML = this.renderModuloHTML();
             contenidoPrincipal.appendChild(moduloProductos);
@@ -1007,7 +997,7 @@ class ModuloProductos {
                                 </tr>
                             </thead>
                             <tbody id="productosTableBody">
-                                <tr><td colspan="6" style="text-align:center;padding:2rem;">Cargando productos...</td></tr>
+                                <tr><td colspan="6" style="text-align:center;padding:2rem;">Cargando productos...<\/td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1037,7 +1027,7 @@ class ModuloProductos {
     mostrarNotificacion(mensaje, tipo) {
         const notificacion = document.createElement('div');
         const colores = { success: '#27AE60', error: '#E74C3C', warning: '#F39C12' };
-        const iconos  = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
+        const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
         notificacion.style.cssText = `
             position:fixed;top:20px;right:20px;padding:1rem 1.5rem;background:${colores[tipo] || '#333'};
             color:white;border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:3000;

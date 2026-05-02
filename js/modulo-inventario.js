@@ -18,14 +18,14 @@ class ModuloInventario {
     }
 
     async cargarListaProductos() {
-        try {
-            const res = await fetch(`${this.apiUrl}?accion=getProductosAdmin&_t=${Date.now()}`);
-            const data = await res.json();
-            if (data.success) this.productos = data.productos;
-        } catch (e) {
-            console.error('Error cargando productos para inventario:', e);
-        }
+    try {
+        const res = await fetch(`${this.apiUrl}?accion=getProductosAdmin&_t=${Date.now()}`);
+        const data = await res.json();
+        if (data.success) this.productos = data.productos;
+    } catch (e) {
+        console.error('Error cargando productos para inventario:', e);
     }
+}
 
     mostrarModulo() {
         document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');

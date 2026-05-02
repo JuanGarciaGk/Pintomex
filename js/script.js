@@ -21,7 +21,6 @@ class POSSystem {
     }
 
     async init() {
-        console.log('Inicializando POSSystem...');
         this.startMeasure('init');
         this.cargarEventos();
         this.initResponsive();
@@ -195,7 +194,6 @@ class POSSystem {
         let intentos = 0;
         this.reconnectInterval = setInterval(async () => {
             intentos++;
-            console.log(`🔄 Intento de reconexión #${intentos}...`);
             try {
                 const response = await fetch(`${this.apiUrl}?accion=getCsrfToken`);
                 if (response.ok) {
@@ -299,6 +297,17 @@ class POSSystem {
             console.error('Error en cachedFetch:', error);
             throw error;
         }
+    }
+
+    limpiarTodaCache() {
+        this.cache.clear();
+        const cacheKeys = [
+            this.apiUrl + '?accion=getProductos',
+            this.apiUrl + '?accion=getProductosAdmin',
+            this.apiUrl + '?accion=getResumenInventario',
+            this.apiUrl + '?accion=getAlertasInventario'
+        ];
+        cacheKeys.forEach(key => this.cache.delete(key));
     }
 
     iniciarCategorias() {
@@ -583,18 +592,16 @@ class POSSystem {
         }
     }
 
-    async cargarProductosDesdeBD() {
+    async cargarProductosDesdeBD(forceRefresh = false) {
         this.startMeasure('cargarProductos');
         this.mostrarCargando(true);
         try {
-            const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
+            const url = this.apiUrl + '?accion=getProductos&_t=' + (forceRefresh ? Date.now() : Date.now());
             const response = await this.fetchConTimeout(url, {}, 3000);
             const data = await response.json();
             this.productos = data;
             
-            if (this.cache) {
-                this.cache.set(this.apiUrl + '?accion=getProductos', { data, timestamp: Date.now() });
-            }
+            this.cache.set(this.apiUrl + '?accion=getProductos', { data, timestamp: Date.now() });
             
             requestAnimationFrame(() => {
                 this.mostrarProductos(this.productos);
@@ -611,18 +618,20 @@ class POSSystem {
     async recargarProductos() {
         try {
             const url = this.apiUrl + '?accion=getProductos&_t=' + Date.now();
-            const response = await this.fetchConTimeout(url, {}, 3000);
+            const response = await this.fetchConTimeout(url, {}, 5000);
             const data = await response.json();
             this.productos = data;
-            
-            if (this.cache) {
-                this.cache.set(this.apiUrl + '?accion=getProductos', { data, timestamp: Date.now() });
+
+            this.cache.set(this.apiUrl + '?accion=getProductos', { data, timestamp: Date.now() });
+
+            const seccionPuntoVenta = document.getElementById('seccionPuntoVenta');
+            if (seccionPuntoVenta && seccionPuntoVenta.style.display !== 'none') {
+                await this.filtrarProductos();
+            } else {
+                this.mostrarProductos(this.productos);
             }
 
             const categoriaActivaActual = this.categoriaActiva;
-            await this.filtrarProductos();
-            this.categoriaActiva = categoriaActivaActual;
-
             document.querySelectorAll('.filtro-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.textContent === categoriaActivaActual);
             });
@@ -636,14 +645,65 @@ class POSSystem {
                             `⚠️ Stock de "${productoActualizado.nombre}" reducido a ${productoActualizado.stock_actual}`,
                             'warning'
                         );
+                    } else if (productoActualizado && item.stock !== productoActualizado.stock_actual) {
+                        item.stock = productoActualizado.stock_actual;
+                    }
+                }
+                const subtotal = this.carrito.reduce((s, i) => s + (i.precio * i.cantidad), 0);
+                this.renderizarCarrito({ items: this.carrito, subtotal: subtotal, total: subtotal });
+            }
+
+            if (window.moduloProductos) {
+                await window.moduloProductos.cargarProductos(true);
+            }
+
+            if (window.moduloInventario) {
+                await window.moduloInventario.cargarListaProductos();
+                if (document.getElementById('moduloInventario')?.style.display === 'block') {
+                    if (window.moduloInventario.tabActiva === 'resumen') {
+                        await window.moduloInventario.cargarResumen();
+                    } else if (window.moduloInventario.tabActiva === 'alertas') {
+                        await window.moduloInventario.cargarAlertas();
                     }
                 }
             }
-
-            if (window.moduloProductos) window.moduloProductos.cargarProductos();
         } catch (error) {
             console.error('Error recargando productos:', error);
         }
+    }
+
+    async actualizarStockGlobal() {
+        this.limpiarTodaCache();
+        
+        await this.recargarProductos();
+        
+        if (window.moduloProductos) {
+            await window.moduloProductos.cargarProductos(true);
+        }
+        
+        if (window.moduloInventario) {
+            await window.moduloInventario.cargarListaProductos();
+            const inventarioVisible = document.getElementById('moduloInventario')?.style.display === 'block';
+            if (inventarioVisible) {
+                if (window.moduloInventario.tabActiva === 'resumen') {
+                    await window.moduloInventario.cargarResumen();
+                } else if (window.moduloInventario.tabActiva === 'alertas') {
+                    await window.moduloInventario.cargarAlertas();
+                } else if (window.moduloInventario.tabActiva === 'tendencias') {
+                    await window.moduloInventario.cargarTendencias(window.moduloInventario.periodoTendencia);
+                }
+                window.moduloInventario.cacheTendencias.clear();
+            }
+        }
+        
+        window.dispatchEvent(new CustomEvent('productos-actualizados'));
+        window.dispatchEvent(new CustomEvent('inventario-actualizado'));
+        
+        this.categoriaActiva = 'Todas';
+        document.querySelectorAll('.filtro-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent === 'Todas');
+        });
+        await this.filtrarProductos();
     }
 
     mostrarCargando(mostrar) {
@@ -1145,8 +1205,7 @@ class POSSystem {
                     this.mostrarNotificacion(`✅ Venta procesada con ${this.metodoPagoActivo}`, 'success');
                 }
 
-                this.cache.delete(this.apiUrl + '?accion=getProductos');
-                await this.cargarProductosDesdeBD();
+                await this.actualizarStockGlobal();
 
                 this.carrito = [];
                 const vaciarFD = new FormData();
@@ -1186,10 +1245,6 @@ class POSSystem {
                     if (document.querySelector('.menu-item.active')?.dataset.modulo === 'caja') {
                         window.moduloCaja.actualizarUI();
                     }
-                }
-
-                if (window.moduloInventario) {
-                    window.dispatchEvent(new CustomEvent('inventario-actualizado'));
                 }
 
                 const inputBusqueda = document.getElementById('codigoBarras');

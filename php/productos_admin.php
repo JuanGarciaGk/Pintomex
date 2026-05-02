@@ -5,12 +5,12 @@ class ProductosAdmin {
 
     private $cacheTtl = 60;
 
-    public function obtenerTodos() {
+    public function obtenerTodos($forceRefresh = false) {
         global $conn;
         try {
             $cacheFile = sys_get_temp_dir() . '/pos_productos_admin_cache.json';
             
-            if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $this->cacheTtl) {
+            if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $this->cacheTtl) {
                 $cached = file_get_contents($cacheFile);
                 if ($cached) {
                     $data = json_decode($cached, true);
@@ -510,6 +510,8 @@ class ProductosAdmin {
             }
         }
         array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
+        array_map('unlink', glob(sys_get_temp_dir() . '/pos_resumen_inventario_cache.json'));
+        array_map('unlink', glob(sys_get_temp_dir() . '/pos_alertas_inventario_cache.json'));
     }
 }
 ?>

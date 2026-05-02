@@ -31,6 +31,26 @@ if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
 $accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
 $metodo = $_SERVER['REQUEST_METHOD'];
 
+// Limpiar caché para operaciones que modifican stock
+$acciones_limpiar_cache = [
+    'procesarVenta', 'cancelarVenta', 'registrarEntradaMercancia', 
+    'registrarAjusteInventario', 'incrementarStock', 'actualizarProducto',
+    'registrarProducto', 'eliminarProducto', 'importarProductosExcel'
+];
+
+if ($metodo === 'POST' && in_array($accion, $acciones_limpiar_cache)) {
+    $temp_dir = sys_get_temp_dir();
+    foreach (glob($temp_dir . '/pos_cache_*.json') as $file) {
+        @unlink($file);
+    }
+    foreach (glob($temp_dir . '/pos_productos_cache.json') as $file) {
+        @unlink($file);
+    }
+    foreach (glob($temp_dir . '/pos_productos_admin_cache.json') as $file) {
+        @unlink($file);
+    }
+}
+
 if ($metodo === 'POST') {
     $rateKey    = 'rate_' . ($accion ?: 'unknown');
     $rateLimit  = 60;
@@ -93,47 +113,6 @@ $caja           = new Caja();
 $inventario     = new Inventario();
 $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
 
-if ($metodo === 'POST' && in_array($accion, [
-    'registrarProducto', 'actualizarProducto', 'eliminarProducto',
-    'cancelarVenta', 'importarProductosExcel', 'incrementarStock',
-    'registrarEntradaMercancia', 'registrarAjusteInventario'
-])) {
-    array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
-}
-
-$cache_ttl = [
-    'getProductos'              => 60,
-    'getProductosPorCategoria'  => 60,
-    'getEstadoCaja'             => 30,
-    'getCarrito'                => 5,
-    'getProductosAdmin'         => 60,
-    'getProductosEstadisticas'  => 60,
-    'getCategoriasConConteo'    => 300,
-    'getResumenInventario'      => 60,
-    'getAlertasInventario'      => 120,
-    'getProductosMasVendidos'   => 120,
-    'getProductosMenosVendidos' => 120,
-];
-
-$cache_key  = md5($_SERVER['REQUEST_URI']);
-$cache_file = sys_get_temp_dir() . '/pos_cache_' . $cache_key . '.json';
-
-if ($metodo === 'GET' && isset($cache_ttl[$accion])) {
-    if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl[$accion]) {
-        $age = time() - filemtime($cache_file);
-        header('Cache-Control: public, max-age=' . ($cache_ttl[$accion] - $age));
-        header('ETag: "' . md5_file($cache_file) . '"');
-        readfile($cache_file);
-        exit;
-    }
-}
-
-function cacheResponse(array $data, string $cache_file): void {
-    file_put_contents($cache_file, json_encode($data, JSON_UNESCAPED_UNICODE));
-}
-
-$response = null;
-
 try {
     switch ($accion) {
 
@@ -142,7 +121,7 @@ try {
             break;
 
         case 'getProductos':
-            $response = $productos->todos();
+            $response = $productos->todos(true); // Forzar refresco
             break;
 
         case 'buscarProductos':
@@ -155,7 +134,6 @@ try {
             $categorias_valid = ['Todas','Acrílicas','Esmaltes','Selladores','Barniz','Aerosol','Impermeabilizante','Complementos'];
             $categoria        = in_array($_GET['categoria'] ?? '', $categorias_valid) ? $_GET['categoria'] : 'Todas';
             $response         = $productos->porCategoria($categoria);
-            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'buscarPorCodigo':
@@ -240,9 +218,6 @@ try {
             $motivo = isset($_POST['motivo']) ? substr(sanitize($_POST['motivo']), 0, 255) : 'Sin motivo';
             if (empty($folio)) { $response = ['success' => false, 'message' => 'Folio inválido']; break; }
             $response = $carrito->cancelarVenta($folio, $motivo);
-            if (!empty($response['success'])) {
-                array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
-            }
             break;
 
         case 'getEstadoCaja':
@@ -285,8 +260,7 @@ try {
 
         case 'getProductosAdmin':
             if ($productosAdmin) {
-                $response = $productosAdmin->obtenerTodos();
-                if ($metodo === 'GET') cacheResponse($response, $cache_file);
+                $response = $productosAdmin->obtenerTodos(true);
             } else {
                 $response = ['success' => false, 'message' => 'Módulo no disponible'];
             }
@@ -330,7 +304,6 @@ try {
         case 'getProductosEstadisticas':
             if ($productosAdmin) {
                 $response = $productosAdmin->obtenerEstadisticas();
-                if ($metodo === 'GET') cacheResponse($response, $cache_file);
             } else {
                 $response = ['success' => false, 'message' => 'Módulo no disponible'];
             }
@@ -339,7 +312,6 @@ try {
         case 'getCategoriasConConteo':
             if ($productosAdmin) {
                 $response = $productosAdmin->obtenerCategoriasConConteo();
-                if ($metodo === 'GET') cacheResponse($response, $cache_file);
             } else {
                 $response = ['success' => false, 'message' => 'Módulo no disponible'];
             }
@@ -362,19 +334,14 @@ try {
             ];
             if (!in_array($mime, $mimeValidos, true)) { $response = ['success' => false, 'message' => 'Tipo de archivo no válido']; break; }
             $response = $productosAdmin->importarExcel($archivo);
-            if (!empty($response['importados'])) {
-                array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
-            }
             break;
 
         case 'getResumenInventario':
             $response = $inventario->getResumen();
-            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'getAlertasInventario':
             $response = $inventario->getAlertas();
-            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'getMovimientosInventario':
@@ -390,13 +357,11 @@ try {
         case 'getProductosMasVendidos':
             $periodo  = in_array($_GET['periodo'] ?? '', ['semana','mes','año']) ? $_GET['periodo'] : 'semana';
             $response = $inventario->getMasVendidos($periodo);
-            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'getProductosMenosVendidos':
             $periodo  = in_array($_GET['periodo'] ?? '', ['semana','mes','año']) ? $_GET['periodo'] : 'semana';
             $response = $inventario->getMenosVendidos($periodo);
-            if ($metodo === 'GET') cacheResponse($response, $cache_file);
             break;
 
         case 'registrarEntradaMercancia':
@@ -407,16 +372,6 @@ try {
             if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'Producto inválido']; break; }
             if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
             $response = $inventario->registrarEntrada($producto_id, $cantidad, $subtipo, $notas);
-            array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
-            $cacheFiles = [
-                sys_get_temp_dir() . '/pos_productos_cache.json',
-                sys_get_temp_dir() . '/pos_productos_admin_cache.json',
-                sys_get_temp_dir() . '/pos_resumen_inventario_cache.json',
-                sys_get_temp_dir() . '/pos_alertas_inventario_cache.json'
-            ];
-            foreach ($cacheFiles as $file) {
-                if (file_exists($file)) @unlink($file);
-            }
             break;
 
         case 'registrarAjusteInventario':
@@ -427,16 +382,6 @@ try {
             if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'Producto inválido']; break; }
             if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
             $response = $inventario->registrarAjuste($producto_id, $cantidad, $subtipo, $notas);
-            array_map('unlink', glob(sys_get_temp_dir() . '/pos_cache_*.json'));
-            $cacheFiles = [
-                sys_get_temp_dir() . '/pos_productos_cache.json',
-                sys_get_temp_dir() . '/pos_productos_admin_cache.json',
-                sys_get_temp_dir() . '/pos_resumen_inventario_cache.json',
-                sys_get_temp_dir() . '/pos_alertas_inventario_cache.json'
-            ];
-            foreach ($cacheFiles as $file) {
-                if (file_exists($file)) @unlink($file);
-            }
             break;
 
         default:
@@ -454,13 +399,6 @@ if (!is_array($response)) {
 }
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
-
-if (rand(1, 100) === 1) {
-    $now = time();
-    foreach (glob(sys_get_temp_dir() . '/pos_cache_*.json') as $file) {
-        if ($now - filemtime($file) > 3600) @unlink($file);
-    }
-}
 
 if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
     ob_end_flush();
