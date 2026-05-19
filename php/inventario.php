@@ -64,7 +64,7 @@ class Inventario {
 
             $mas = $conn->query("
                 SELECT p.id, p.nombre, p.categoria, p.stock_actual,
-                    COALESCE(SUM(dv.cantidad), 0) AS total_vendido,
+                    COALESCE(SUM(CASE WHEN v.estado = 'activa' AND v.fecha >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN dv.cantidad ELSE 0 END), 0) AS total_vendido,
                     COUNT(DISTINCT v.id) AS num_ventas
                 FROM productos p
                 LEFT JOIN detalles_venta dv ON dv.producto_id = p.id
@@ -111,15 +111,20 @@ class Inventario {
                 default => 7,
             };
             $productos = $conn->query("
-                SELECT p.id, p.nombre, p.categoria, p.stock_actual,
-                    COALESCE(SUM(dv.cantidad), 0) AS total_vendido
+                SELECT
+                    p.id,
+                    p.nombre,
+                    p.categoria,
+                    p.stock_actual,
+                    COALESCE(SUM(CASE
+                        WHEN v.estado = 'activa' AND v.fecha >= DATE_SUB(NOW(), INTERVAL {$dias} DAY)
+                        THEN dv.cantidad ELSE 0 END), 0) AS total_vendido
                 FROM productos p
                 LEFT JOIN detalles_venta dv ON dv.producto_id = p.id
                 LEFT JOIN ventas v ON v.id = dv.venta_id
-                    AND v.estado = 'activa'
-                    AND v.fecha >= DATE_SUB(NOW(), INTERVAL {$dias} DAY)
-                GROUP BY p.id
-                ORDER BY total_vendido DESC
+                GROUP BY p.id, p.nombre, p.categoria, p.stock_actual
+                HAVING total_vendido > 0
+                ORDER BY total_vendido DESC, p.nombre ASC
                 LIMIT 10")->fetch_all(MYSQLI_ASSOC);
 
             return ['success' => true, 'productos' => $productos];
@@ -138,16 +143,20 @@ class Inventario {
                 default => 7,
             };
             $productos = $conn->query("
-                SELECT p.id, p.nombre, p.categoria, p.stock_actual,
+                SELECT
+                    p.id,
+                    p.nombre,
+                    p.categoria,
+                    p.stock_actual,
                     COALESCE(SUM(dv.cantidad), 0) AS total_vendido
                 FROM productos p
                 INNER JOIN detalles_venta dv ON dv.producto_id = p.id
                 INNER JOIN ventas v ON v.id = dv.venta_id
                     AND v.estado = 'activa'
                     AND v.fecha >= DATE_SUB(NOW(), INTERVAL {$dias} DAY)
-                GROUP BY p.id
+                GROUP BY p.id, p.nombre, p.categoria, p.stock_actual
                 HAVING total_vendido > 0
-                ORDER BY total_vendido ASC
+                ORDER BY total_vendido ASC, p.nombre ASC
                 LIMIT 10")->fetch_all(MYSQLI_ASSOC);
 
             return ['success' => true, 'productos' => $productos];

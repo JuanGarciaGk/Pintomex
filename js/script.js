@@ -690,14 +690,18 @@ class POSSystem {
                 } else if (window.moduloInventario.tabActiva === 'alertas') {
                     await window.moduloInventario.cargarAlertas();
                 } else if (window.moduloInventario.tabActiva === 'tendencias') {
-                    await window.moduloInventario.cargarTendencias(window.moduloInventario.periodoTendencia);
+                    window.moduloInventario.cacheTendencias.clear();
+                    await window.moduloInventario.cargarTendencias(window.moduloInventario.periodoTendencia, true);
+                } else {
+                    window.moduloInventario.cacheTendencias.clear();
                 }
-                window.moduloInventario.cacheTendencias.clear();
             }
         }
         
         window.dispatchEvent(new CustomEvent('productos-actualizados'));
         window.dispatchEvent(new CustomEvent('inventario-actualizado'));
+        window.dispatchEvent(new CustomEvent('tendencias-actualizadas'));
+        window.dispatchEvent(new CustomEvent('venta-procesada'));
         
         this.categoriaActiva = 'Todas';
         document.querySelectorAll('.filtro-btn').forEach(btn => {

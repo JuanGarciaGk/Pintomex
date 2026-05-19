@@ -15,6 +15,40 @@ class ModuloInventario {
         document.querySelectorAll('.menu-item[data-modulo="inventario"]').forEach(item => {
             item.addEventListener('click', () => this.mostrarModulo());
         });
+        this.configurarActualizacionTiempoReal();
+    }
+
+    configurarActualizacionTiempoReal() {
+        if (this.eventosTiempoRealConfigurados) return;
+        this.eventosTiempoRealConfigurados = true;
+
+        const actualizar = async () => {
+            await this.actualizarDatosEnVivo();
+        };
+
+        window.addEventListener('productos-actualizados', actualizar);
+        window.addEventListener('inventario-actualizado', actualizar);
+        window.addEventListener('tendencias-actualizadas', actualizar);
+        window.addEventListener('venta-procesada', actualizar);
+        window.addEventListener('ticket-cancelado', actualizar);
+    }
+
+    async actualizarDatosEnVivo() {
+        this.cacheTendencias.clear();
+        await this.cargarListaProductos();
+
+        const moduloVisible = document.getElementById('moduloInventario')?.style.display === 'block';
+        if (!moduloVisible) return;
+
+        if (this.tabActiva === 'resumen') {
+            await this.cargarResumen();
+        } else if (this.tabActiva === 'alertas') {
+            await this.cargarAlertas();
+        } else if (this.tabActiva === 'tendencias') {
+            await this.cargarTendencias(this.periodoTendencia, true);
+        } else if (this.tabActiva === 'historial') {
+            await this.cargarHistorialTabla();
+        }
     }
 
     async cargarListaProductos() {
@@ -378,7 +412,7 @@ class ModuloInventario {
         }
     }
 
-    async cargarTendencias(periodo = null) {
+    async cargarTendencias(periodo = null, forceRefresh = false) {
         if (periodo) this.periodoTendencia = periodo;
 
         const contenedor = document.getElementById('invTabContenido');
@@ -415,17 +449,17 @@ class ModuloInventario {
             btn.addEventListener('click', () => this.cargarTendencias(btn.dataset.periodo));
         });
 
-        this.cargarTendenciasTabla();
+        this.cargarTendenciasTabla(forceRefresh);
     }
 
-    async cargarTendenciasTabla() {
+    async cargarTendenciasTabla(forceRefresh = false) {
         const wrap = document.getElementById('tendenciasContenido');
         if (!wrap) return;
 
         const cacheKey = `tendencias_${this.periodoTendencia}`;
         const cacheData = this.cacheTendencias.get(cacheKey);
 
-        if (cacheData && (Date.now() - cacheData.timestamp) < 60000) {
+        if (!forceRefresh && cacheData && (Date.now() - cacheData.timestamp) < 60000) {
             this.renderizarTendencias(wrap, cacheData.dataMas, cacheData.dataMenos, cacheData.dataEstancados);
             return;
         }
@@ -700,6 +734,7 @@ class ModuloInventario {
                 
                 window.dispatchEvent(new CustomEvent('productos-actualizados'));
                 window.dispatchEvent(new CustomEvent('inventario-actualizado'));
+                window.dispatchEvent(new CustomEvent('tendencias-actualizadas'));
                 
                 if (window.pos) {
                     window.pos.recargarProductos();
@@ -844,6 +879,7 @@ class ModuloInventario {
                 
                 window.dispatchEvent(new CustomEvent('productos-actualizados'));
                 window.dispatchEvent(new CustomEvent('inventario-actualizado'));
+                window.dispatchEvent(new CustomEvent('tendencias-actualizadas'));
                 
                 if (window.pos) {
                     window.pos.recargarProductos();
