@@ -930,7 +930,7 @@ class ModuloProductos {
         if (!moduloProductos) {
             moduloProductos = document.createElement('section');
             moduloProductos.id = 'moduloProductos';
-            moduloProductos.className = 'modulo-productos';
+            moduloProductos.className = 'escanner-section modulo-productos-section';
             moduloProductos.innerHTML = this.renderModuloHTML();
             contenidoPrincipal.appendChild(moduloProductos);
         }

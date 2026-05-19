@@ -380,91 +380,208 @@ class ModuloInventario {
 
     async cargarTendencias(periodo = null) {
         if (periodo) this.periodoTendencia = periodo;
-        
+
         const contenedor = document.getElementById('invTabContenido');
+        if (!contenedor) return;
+
+        const periodoTexto = this.periodoTendencia === 'semana' ? 'últimos 7 días' : this.periodoTendencia === 'mes' ? 'últimos 30 días' : 'últimos 365 días';
+
         contenedor.innerHTML = `
-            <div style="display:flex;align-items:center;justify-content:center;gap:1.2rem;margin-bottom:2rem;flex-wrap:wrap;">
-                <span style="font-weight:600;color:var(--gray);font-size:1rem;">Período de análisis:</span>
-                <button class="btn-periodo ${this.periodoTendencia === 'semana' ? 'active' : ''}" data-periodo="semana" style="padding:0.7rem 1.8rem;border:2px solid var(--light);background:${this.periodoTendencia === 'semana' ? 'var(--primary)' : 'white'};color:${this.periodoTendencia === 'semana' ? 'white' : 'var(--gray)'};border-radius:30px;cursor:pointer;font-size:0.95rem;font-weight:500;">Últimos 7 días</button>
-                <button class="btn-periodo ${this.periodoTendencia === 'mes' ? 'active' : ''}" data-periodo="mes" style="padding:0.7rem 1.8rem;border:2px solid var(--light);background:${this.periodoTendencia === 'mes' ? 'var(--primary)' : 'white'};color:${this.periodoTendencia === 'mes' ? 'white' : 'var(--gray)'};border-radius:30px;cursor:pointer;font-size:0.95rem;font-weight:500;">Últimos 30 días</button>
-                <button class="btn-periodo ${this.periodoTendencia === 'año' ? 'active' : ''}" data-periodo="año" style="padding:0.7rem 1.8rem;border:2px solid var(--light);background:${this.periodoTendencia === 'año' ? 'var(--primary)' : 'white'};color:${this.periodoTendencia === 'año' ? 'white' : 'var(--gray)'};border-radius:30px;cursor:pointer;font-size:0.95rem;font-weight:500;">Últimos 365 días</button>
-            </div>
-            <div id="tendenciasContenido"><div style="text-align:center;padding:3rem;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:1rem;font-size:1rem;">Cargando datos de tendencias...</p></div></div>`;
+            <div class="tendencias-panel">
+                <div class="tendencias-intro">
+                    <div>
+                        <h3><i class="fas fa-chart-line"></i> Análisis de Tendencias</h3>
+                        <p>Evalúa el comportamiento de los productos para decidir qué surtir, reducir compras innecesarias y detectar inventario que no se está moviendo.</p>
+                    </div>
+                    <div class="tendencias-definicion">
+                        <strong>Producto estancado:</strong> producto que no tuvo ventas ni movimientos de inventario durante el periodo seleccionado.
+                    </div>
+                </div>
+                <div class="tendencias-periodos">
+                    <span>Periodo de análisis:</span>
+                    <button class="btn-periodo ${this.periodoTendencia === 'semana' ? 'active' : ''}" data-periodo="semana">Últimos 7 días</button>
+                    <button class="btn-periodo ${this.periodoTendencia === 'mes' ? 'active' : ''}" data-periodo="mes">Últimos 30 días</button>
+                    <button class="btn-periodo ${this.periodoTendencia === 'año' ? 'active' : ''}" data-periodo="año">Últimos 365 días</button>
+                </div>
+                <div class="tendencias-resumen-periodo">
+                    <i class="fas fa-calendar-check"></i> Mostrando información de los ${periodoTexto}.
+                </div>
+                <div id="tendenciasContenido">
+                    <div class="inv-loading"><i class="fas fa-spinner fa-spin"></i><span>Cargando datos de tendencias...</span></div>
+                </div>
+            </div>`;
 
         contenedor.querySelectorAll('.btn-periodo').forEach(btn => {
             btn.addEventListener('click', () => this.cargarTendencias(btn.dataset.periodo));
         });
-        
+
         this.cargarTendenciasTabla();
     }
 
     async cargarTendenciasTabla() {
         const wrap = document.getElementById('tendenciasContenido');
         if (!wrap) return;
-        
+
         const cacheKey = `tendencias_${this.periodoTendencia}`;
         const cacheData = this.cacheTendencias.get(cacheKey);
-        
+
         if (cacheData && (Date.now() - cacheData.timestamp) < 60000) {
-            this.renderizarTendencias(wrap, cacheData.dataMas, cacheData.dataMenos);
+            this.renderizarTendencias(wrap, cacheData.dataMas, cacheData.dataMenos, cacheData.dataEstancados);
             return;
         }
-        
+
         try {
-            const [resMas, resMenos] = await Promise.all([
+            const [resMas, resMenos, resEstancados] = await Promise.all([
                 fetch(`${this.apiUrl}?accion=getProductosMasVendidos&periodo=${this.periodoTendencia}&_t=${Date.now()}`),
-                fetch(`${this.apiUrl}?accion=getProductosMenosVendidos&periodo=${this.periodoTendencia}&_t=${Date.now()}`)
+                fetch(`${this.apiUrl}?accion=getProductosMenosVendidos&periodo=${this.periodoTendencia}&_t=${Date.now()}`),
+                fetch(`${this.apiUrl}?accion=getProductosEstancados&periodo=${this.periodoTendencia}&_t=${Date.now()}`)
             ]);
-            
-            const [dataMas, dataMenos] = await Promise.all([resMas.json(), resMenos.json()]);
-            
+
+            const [dataMas, dataMenos, dataEstancados] = await Promise.all([resMas.json(), resMenos.json(), resEstancados.json()]);
+
+            if (!dataMas.success || !dataMenos.success || !dataEstancados.success) {
+                throw new Error('No fue posible obtener toda la información de tendencias');
+            }
+
             this.cacheTendencias.set(cacheKey, {
-                dataMas: dataMas,
-                dataMenos: dataMenos,
+                dataMas,
+                dataMenos,
+                dataEstancados,
                 timestamp: Date.now()
             });
-            
-            this.renderizarTendencias(wrap, dataMas, dataMenos);
+
+            this.renderizarTendencias(wrap, dataMas, dataMenos, dataEstancados);
         } catch (e) {
-            wrap.innerHTML = `<div style="padding:1.5rem;background:#fff5f5;border-left:5px solid var(--danger);border-radius:var(--radius-md);color:var(--danger);font-size:1rem;">Error al cargar los datos de tendencias.</div>`;
+            wrap.innerHTML = `<div class="inv-error"><i class="fas fa-exclamation-circle"></i> Error al cargar los datos de tendencias.</div>`;
         }
     }
-    
-    renderizarTendencias(wrap, dataMas, dataMenos) {
-        const renderLista = (productos, esMas) => {
-            if (!productos || productos.length === 0) return '<div style="padding:2rem;text-align:center;color:var(--gray);font-size:1rem;">No hay datos suficientes para este período.</div>';
-            const maxVendido = parseInt(productos[0]?.total_vendido) || 1;
-            return productos.map((p, i) => {
+
+    renderizarTendencias(wrap, dataMas, dataMenos, dataEstancados) {
+        const mas = dataMas?.productos || [];
+        const menos = dataMenos?.productos || [];
+        const estancados = dataEstancados?.productos || [];
+        const valorEstancado = parseFloat(dataEstancados?.valor_estancado || 0);
+        const periodoDias = parseInt(dataEstancados?.dias || 0);
+        const totalMas = mas.reduce((sum, p) => sum + (parseInt(p.total_vendido) || 0), 0);
+        const totalMenos = menos.reduce((sum, p) => sum + (parseInt(p.total_vendido) || 0), 0);
+        const totalStockEstancado = estancados.reduce((sum, p) => sum + (parseInt(p.stock_actual) || 0), 0);
+        const formatMoney = valor => `$${parseFloat(valor || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        const renderListaVentas = (productos, tipo) => {
+            if (!productos.length) {
+                const icono = tipo === 'mas' ? 'fa-chart-simple' : 'fa-circle-info';
+                const texto = tipo === 'mas' ? 'Aún no hay ventas suficientes para identificar productos de alta demanda.' : 'No hay información suficiente para detectar baja rotación.';
+                return `<div class="tendencia-vacio tendencia-vacio-${tipo}"><i class="fas ${icono}"></i><p>${texto}</p></div>`;
+            }
+
+            const maxVendido = Math.max(...productos.map(p => parseInt(p.total_vendido) || 0), 1);
+            return productos.slice(0, 8).map((p, i) => {
                 const vendido = parseInt(p.total_vendido) || 0;
-                const porcentaje = esMas ? Math.round((vendido / maxVendido) * 100) : 0;
+                const porcentaje = Math.max(8, Math.round((vendido / maxVendido) * 100));
+                const stock = parseInt(p.stock_actual) || 0;
+                const categoria = this.escapeHTML(p.categoria || 'Sin categoría');
+                const nombre = this.escapeHTML(p.nombre || 'Producto sin nombre');
+                const clase = tipo === 'mas' ? 'top' : 'low';
+                const recomendacion = tipo === 'mas'
+                    ? (stock <= 0 ? 'Surtir urgente' : stock <= 5 ? 'Revisar resurtido' : 'Mantener disponible')
+                    : 'Comprar con cautela';
+                const icono = tipo === 'mas' ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
                 return `
-                    <div style="display:flex;align-items:center;padding:0.8rem 1.2rem;border-bottom:1px solid var(--light);gap:1rem;">
-                        <div style="width:32px;height:32px;background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:bold;flex-shrink:0;">${i + 1}</div>
-                        <div style="flex:1;min-width:0;">
-                            <div style="font-weight:600;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escapeHTML(p.nombre)}</div>
-                            <div style="font-size:0.75rem;color:var(--gray);margin-top:0.2rem;">${this.escapeHTML(p.categoria)}</div>
-                            ${esMas ? `<div style="height:4px;background:var(--light);border-radius:4px;margin-top:0.5rem;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#e74c3c,#f39c12);border-radius:4px;width:${porcentaje}%;"></div></div>` : ''}
+                    <article class="tendencia-producto tendencia-producto-${clase}">
+                        <div class="tendencia-rank tendencia-rank-${clase}">${i + 1}</div>
+                        <div class="tendencia-info">
+                            <div class="tendencia-linea-superior">
+                                <h5>${nombre}</h5>
+                                <span class="tendencia-badge tendencia-badge-${clase}"><i class="fas ${icono}"></i> ${vendido} u.</span>
+                            </div>
+                            <div class="tendencia-meta">${categoria} · Stock actual: ${stock}</div>
+                            <div class="tendencia-barra tendencia-barra-${clase}"><div style="width:${porcentaje}%;"></div></div>
+                            <div class="tendencia-accion tendencia-accion-${clase}"><i class="fas fa-lightbulb"></i> ${recomendacion}</div>
                         </div>
-                        <div style="text-align:right;flex-shrink:0;">
-                            <div style="font-size:1.2rem;font-weight:700;color:var(--primary);">${vendido}</div>
-                            <div style="font-size:0.7rem;color:var(--gray);">unidades</div>
+                    </article>`;
+            }).join('');
+        };
+
+        const renderEstancados = (productos) => {
+            if (!productos.length) return '<div class="tendencia-vacio tendencia-vacio-stuck"><i class="fas fa-circle-check"></i><p>No se detectaron productos estancados en este periodo.</p></div>';
+            return productos.slice(0, 8).map((p, i) => {
+                const stock = parseInt(p.stock_actual) || 0;
+                const precio = parseFloat(p.precio) || 0;
+                const valor = parseFloat(p.valor_inventario) || (stock * precio);
+                const ultimo = p.ultimo_movimiento || p.ultima_venta || 'Sin registro';
+                const categoria = this.escapeHTML(p.categoria || 'Sin categoría');
+                const nombre = this.escapeHTML(p.nombre || 'Producto sin nombre');
+                return `
+                    <article class="tendencia-producto tendencia-producto-stuck">
+                        <div class="tendencia-rank tendencia-rank-stuck">${i + 1}</div>
+                        <div class="tendencia-info">
+                            <div class="tendencia-linea-superior">
+                                <h5>${nombre}</h5>
+                                <span class="tendencia-badge tendencia-badge-stuck"><i class="fas fa-triangle-exclamation"></i> ${formatMoney(valor)}</span>
+                            </div>
+                            <div class="tendencia-meta">${categoria} · Stock detenido: ${stock} · Último movimiento: ${this.escapeHTML(String(ultimo))}</div>
+                            <div class="tendencia-accion tendencia-accion-stuck"><i class="fas fa-bullseye"></i> Revisar promoción, descuento o depuración</div>
                         </div>
-                    </div>
-                `;
+                    </article>`;
             }).join('');
         };
 
         wrap.innerHTML = `
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.5rem;">
-                <div style="background:white;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--light);box-shadow:var(--shadow-sm);">
-                    <div style="padding:0.8rem 1.2rem;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;font-weight:600;font-size:1rem;"><i class="fas fa-trophy" style="margin-right:0.5rem;"></i> Productos Más Vendidos</div>
-                    ${renderLista(dataMas.productos, true)}
+            <section class="tendencias-dashboard">
+                <div class="tendencias-kpis">
+                    <div class="tendencias-kpi tendencias-kpi-top">
+                        <i class="fas fa-arrow-trend-up"></i>
+                        <div><strong>${totalMas}</strong><span>unidades en productos más vendidos</span></div>
+                    </div>
+                    <div class="tendencias-kpi tendencias-kpi-low">
+                        <i class="fas fa-scale-balanced"></i>
+                        <div><strong>${totalMenos}</strong><span>unidades en productos menos vendidos</span></div>
+                    </div>
+                    <div class="tendencias-kpi tendencias-kpi-stuck">
+                        <i class="fas fa-box-open"></i>
+                        <div><strong>${estancados.length}</strong><span>productos estancados en ${periodoDias} días</span></div>
+                    </div>
+                    <div class="tendencias-kpi tendencias-kpi-money">
+                        <i class="fas fa-coins"></i>
+                        <div><strong>${formatMoney(valorEstancado)}</strong><span>valor aproximado detenido</span></div>
+                    </div>
                 </div>
-                <div style="background:white;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--light);box-shadow:var(--shadow-sm);">
-                    <div style="padding:0.8rem 1.2rem;background:linear-gradient(135deg,#3498db,#1a5276);color:white;font-weight:600;font-size:1rem;"><i class="fas fa-arrow-down" style="margin-right:0.5rem;"></i> Productos Menos Vendidos</div>
-                    ${renderLista(dataMenos.productos, false)}
+
+                <div class="tendencias-alerta-visual">
+                    <div><i class="fas fa-eye"></i></div>
+                    <p><strong>Lectura rápida:</strong> verde indica alta demanda, amarillo indica baja rotación y rojo indica inventario sin movimiento que puede generar pérdidas.</p>
                 </div>
-            </div>`;
+
+                <div class="tendencias-grid-mejorado">
+                    <div class="tendencia-card tendencia-card-top">
+                        <div class="tendencia-card-header">
+                            <i class="fas fa-trophy"></i>
+                            <div><h4>Productos más vendidos</h4><p>Alta demanda. Prioriza resurtido y evita quedarte sin stock.</p></div>
+                        </div>
+                        <div class="tendencia-card-body">${renderListaVentas(mas, 'mas')}</div>
+                    </div>
+                    <div class="tendencia-card tendencia-card-low">
+                        <div class="tendencia-card-header">
+                            <i class="fas fa-circle-exclamation"></i>
+                            <div><h4>Productos menos vendidos</h4><p>Ventas bajas. Reduce compras o revisa precio, ubicación y promoción.</p></div>
+                        </div>
+                        <div class="tendencia-card-body">${renderListaVentas(menos, 'menos')}</div>
+                    </div>
+                    <div class="tendencia-card tendencia-card-stuck">
+                        <div class="tendencia-card-header">
+                            <i class="fas fa-ban"></i>
+                            <div><h4>Productos estancados</h4><p>Sin ventas ni movimientos. Identifica inventario detenido y posible pérdida.</p></div>
+                        </div>
+                        <div class="tendencia-card-body">${renderEstancados(estancados)}</div>
+                    </div>
+                </div>
+
+                <div class="tendencias-decision-grid">
+                    <div class="decision-card decision-top"><i class="fas fa-cart-plus"></i><strong>Comprar más</strong><span>Productos verdes con alta rotación y stock bajo.</span></div>
+                    <div class="decision-card decision-low"><i class="fas fa-hand-holding-dollar"></i><strong>Invertir con cuidado</strong><span>Productos amarillos con ventas bajas.</span></div>
+                    <div class="decision-card decision-stuck"><i class="fas fa-tags"></i><strong>Aplicar estrategia</strong><span>Productos rojos: promoción, descuento o depuración.</span></div>
+                </div>
+            </section>`;
     }
 
     mostrarModalEntrada(preseleccionId = null, preseleccionNombre = '') {

@@ -13,12 +13,12 @@ register_shutdown_function(function () {
     }
 });
 
-require_once 'config.php';
-require_once 'productos.php';
-require_once 'carrito.php';
-require_once 'caja.php';
-require_once 'productos_admin.php';
-require_once 'inventario.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/productos.php';
+require_once __DIR__ . '/carrito.php';
+require_once __DIR__ . '/caja.php';
+require_once __DIR__ . '/productos_admin.php';
+require_once __DIR__ . '/inventario.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, no-store, must-revalidate');
@@ -31,7 +31,6 @@ if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
 $accion = $_POST['accion'] ?? $_GET['accion'] ?? '';
 $metodo = $_SERVER['REQUEST_METHOD'];
 
-// Limpiar caché para operaciones que modifican stock
 $acciones_limpiar_cache = [
     'procesarVenta', 'cancelarVenta', 'registrarEntradaMercancia', 
     'registrarAjusteInventario', 'incrementarStock', 'actualizarProducto',
@@ -95,7 +94,7 @@ $acciones_sin_csrf = [
     'buscarVentaPorFolio', 'obtenerDetallesVenta',
     'verificarCodigoBarras',
     'getResumenInventario', 'getMovimientosInventario', 'getAlertasInventario',
-    'getProductosMasVendidos', 'getProductosMenosVendidos'
+    'getProductosMasVendidos', 'getProductosMenosVendidos', 'getProductosEstancados'
 ];
 
 if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
@@ -362,6 +361,11 @@ try {
         case 'getProductosMenosVendidos':
             $periodo  = in_array($_GET['periodo'] ?? '', ['semana','mes','año']) ? $_GET['periodo'] : 'semana';
             $response = $inventario->getMenosVendidos($periodo);
+            break;
+
+        case 'getProductosEstancados':
+            $periodo  = in_array($_GET['periodo'] ?? '', ['semana','mes','año']) ? $_GET['periodo'] : 'semana';
+            $response = $inventario->getEstancados($periodo);
             break;
 
         case 'registrarEntradaMercancia':

@@ -445,6 +445,9 @@ header('Cache-Control: public, max-age=3600');
 
     <link rel="preload" href="css/modulo-productos.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/modulo-productos.css"></noscript>
+
+    <link rel="preload" href="css/modulo-inventario.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/modulo-inventario.css"></noscript>
 </head>
 <body>
     <div id="offlineBanner" role="alert" aria-live="assertive">

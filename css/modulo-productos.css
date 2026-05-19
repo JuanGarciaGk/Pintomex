@@ -1,16 +1,11 @@
-/* modulo-productos.css */
-.modulo-productos {
-    padding: clamp(1rem, 3vw, 1.5rem);
-    max-width: 1400px;
-    margin: 0 auto;
+.modulo-productos-section {
     width: 100%;
 }
 
 .productos-container {
-    background: white;
-    border-radius: var(--radius-lg);
-    padding: clamp(1rem, 4vw, 1.5rem);
-    box-shadow: var(--shadow-md);
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .productos-header {
@@ -52,7 +47,6 @@
     box-shadow: var(--shadow-md);
 }
 
-/* Estadísticas */
 .stats-container {
     margin-bottom: 2rem;
 }
@@ -129,7 +123,6 @@
     color: var(--gray);
 }
 
-/* Filtros */
 .productos-filtros {
     display: flex;
     flex-wrap: wrap;
@@ -213,7 +206,6 @@
     transform: scale(1.05);
 }
 
-/* Tabla */
 .productos-tabla-container {
     overflow-x: auto;
     border-radius: var(--radius-md);
@@ -281,7 +273,6 @@
     color: var(--danger);
 }
 
-/* Modal formulario */
 .modal-producto {
     max-width: min(700px, 95%);
     width: 100%;
@@ -425,7 +416,6 @@
     transform: translateY(-2px);
 }
 
-/* ─── Sección de cancelar ticket ─── */
 .cancelar-ticket-container {
     padding: 0.5rem 0;
 }
@@ -437,7 +427,6 @@
     border: 1px solid var(--light);
 }
 
-/* Responsive */
 @media (max-width: 768px) {
     .productos-header {
         flex-direction: column;

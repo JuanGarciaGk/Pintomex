@@ -157,6 +157,62 @@ class Inventario {
         }
     }
 
+
+    public function getEstancados(string $periodo = 'semana'): array {
+        global $conn;
+        try {
+            $dias = match($periodo) {
+                'mes'  => 30,
+                'año'  => 365,
+                default => 7,
+            };
+
+            $productos = $conn->query("
+                SELECT
+                    p.id,
+                    p.nombre,
+                    p.categoria,
+                    p.stock_actual,
+                    p.stock_minimo,
+                    p.precio,
+                    COALESCE(SUM(CASE
+                        WHEN v.estado = 'activa' AND v.fecha >= DATE_SUB(NOW(), INTERVAL {$dias} DAY)
+                        THEN dv.cantidad ELSE 0 END), 0) AS total_vendido,
+                    COUNT(DISTINCT CASE
+                        WHEN mi.fecha >= DATE_SUB(NOW(), INTERVAL {$dias} DAY)
+                        THEN mi.id ELSE NULL END) AS movimientos_periodo,
+                    MAX(CASE
+                        WHEN v.estado = 'activa' THEN v.fecha ELSE NULL END) AS ultima_venta,
+                    MAX(mi.fecha) AS ultimo_movimiento,
+                    (p.stock_actual * p.precio) AS valor_inventario
+                FROM productos p
+                LEFT JOIN detalles_venta dv ON dv.producto_id = p.id
+                LEFT JOIN ventas v ON v.id = dv.venta_id
+                LEFT JOIN movimientos_inventario mi ON mi.producto_id = p.id
+                GROUP BY p.id, p.nombre, p.categoria, p.stock_actual, p.stock_minimo, p.precio
+                HAVING total_vendido = 0 AND movimientos_periodo = 0 AND p.stock_actual > 0
+                ORDER BY valor_inventario DESC, p.stock_actual DESC, p.nombre ASC
+                LIMIT 15")->fetch_all(MYSQLI_ASSOC);
+
+            $totalEstancado = 0;
+            foreach ($productos as &$producto) {
+                $producto['valor_inventario'] = (float)$producto['valor_inventario'];
+                $totalEstancado += $producto['valor_inventario'];
+            }
+
+            return [
+                'success' => true,
+                'productos' => $productos,
+                'total_estancados' => count($productos),
+                'valor_estancado' => $totalEstancado,
+                'dias' => $dias,
+            ];
+        } catch (Exception $e) {
+            error_log("Error en getEstancados: " . $e->getMessage());
+            return ['success' => false, 'message' => 'Error al obtener productos estancados'];
+        }
+    }
+
     public function getMovimientos($producto_id = null, $tipo = null, $subtipo = null, $fecha_inicio = null, $fecha_fin = null, $limite = 100) {
         global $conn;
         try {
