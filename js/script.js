@@ -538,7 +538,7 @@ class POSSystem {
 
                 document.querySelectorAll('.contenido-principal > section').forEach(s => s.style.display = 'none');
 
-                if (modulo !== 'productos' && modulo !== 'inventario') {
+                if (modulo !== 'productos' && modulo !== 'inventario' && modulo !== 'reportes') {
                     this._mostrarCarrito();
                 }
 
@@ -566,6 +566,17 @@ class POSSystem {
                         window.moduloInventario = new ModuloInventario();
                         window.moduloInventario.init().then(() => {
                             window.moduloInventario.mostrarModulo();
+                        });
+                    }
+
+                } else if (modulo === 'reportes') {
+                    this._ocultarCarrito();
+                    if (window.moduloReportes) {
+                        window.moduloReportes.mostrarModulo();
+                    } else {
+                        window.moduloReportes = new ModuloReportes();
+                        window.moduloReportes.init().then(() => {
+                            window.moduloReportes.mostrarModulo();
                         });
                     }
                 }
@@ -690,18 +701,14 @@ class POSSystem {
                 } else if (window.moduloInventario.tabActiva === 'alertas') {
                     await window.moduloInventario.cargarAlertas();
                 } else if (window.moduloInventario.tabActiva === 'tendencias') {
-                    window.moduloInventario.cacheTendencias.clear();
-                    await window.moduloInventario.cargarTendencias(window.moduloInventario.periodoTendencia, true);
-                } else {
-                    window.moduloInventario.cacheTendencias.clear();
+                    await window.moduloInventario.cargarTendencias(window.moduloInventario.periodoTendencia);
                 }
+                window.moduloInventario.cacheTendencias.clear();
             }
         }
         
         window.dispatchEvent(new CustomEvent('productos-actualizados'));
         window.dispatchEvent(new CustomEvent('inventario-actualizado'));
-        window.dispatchEvent(new CustomEvent('tendencias-actualizadas'));
-        window.dispatchEvent(new CustomEvent('venta-procesada'));
         
         this.categoriaActiva = 'Todas';
         document.querySelectorAll('.filtro-btn').forEach(btn => {

@@ -1,4 +1,6 @@
 <?php
+
+date_default_timezone_set('America/Mexico_City');
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
@@ -13,12 +15,13 @@ register_shutdown_function(function () {
     }
 });
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/productos.php';
-require_once __DIR__ . '/carrito.php';
-require_once __DIR__ . '/caja.php';
-require_once __DIR__ . '/productos_admin.php';
-require_once __DIR__ . '/inventario.php';
+require_once 'config.php';
+require_once 'productos.php';
+require_once 'carrito.php';
+require_once 'caja.php';
+require_once 'productos_admin.php';
+require_once 'inventario.php';
+require_once 'reportes.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, no-store, must-revalidate');
@@ -94,7 +97,8 @@ $acciones_sin_csrf = [
     'buscarVentaPorFolio', 'obtenerDetallesVenta',
     'verificarCodigoBarras',
     'getResumenInventario', 'getMovimientosInventario', 'getAlertasInventario',
-    'getProductosMasVendidos', 'getProductosMenosVendidos', 'getProductosEstancados'
+    'getProductosMasVendidos', 'getProductosMenosVendidos', 'getProductosEstancados',
+    'getReportesCortes', 'getReporteDetalleCorte', 'getReporteFinanciero'
 ];
 
 if ($metodo === 'POST' && !in_array($accion, $acciones_sin_csrf)) {
@@ -111,6 +115,7 @@ $carrito        = new Carrito();
 $caja           = new Caja();
 $inventario     = new Inventario();
 $productosAdmin = class_exists('ProductosAdmin') ? new ProductosAdmin() : null;
+$reportes       = new Reportes();
 
 try {
     switch ($accion) {
@@ -386,6 +391,25 @@ try {
             if (!$producto_id || $producto_id <= 0) { $response = ['success' => false, 'message' => 'Producto inválido']; break; }
             if (!$cantidad    || $cantidad <= 0)    { $response = ['success' => false, 'message' => 'Cantidad inválida'];  break; }
             $response = $inventario->registrarAjuste($producto_id, $cantidad, $subtipo, $notas);
+            break;
+
+
+        case 'getReportesCortes':
+            $fecha_inicio = isset($_GET['fecha_inicio']) ? sanitize($_GET['fecha_inicio']) : null;
+            $fecha_fin    = isset($_GET['fecha_fin'])    ? sanitize($_GET['fecha_fin'])    : null;
+            $busqueda     = isset($_GET['busqueda'])     ? sanitize($_GET['busqueda'])     : '';
+            $response     = $reportes->getHistorialCortes($fecha_inicio, $fecha_fin, $busqueda);
+            break;
+
+        case 'getReporteDetalleCorte':
+            $corte_id = filter_var($_GET['corte_id'] ?? 0, FILTER_VALIDATE_INT);
+            if (!$corte_id || $corte_id <= 0) { $response = ['success' => false, 'message' => 'ID de corte inválido']; break; }
+            $response = $reportes->getDetalleCorteReporte($corte_id);
+            break;
+
+        case 'getReporteFinanciero':
+            $periodo  = in_array($_GET['periodo'] ?? '', ['dia','semana','mes']) ? $_GET['periodo'] : 'dia';
+            $response = $reportes->getResumenFinanciero($periodo);
             break;
 
         default:
