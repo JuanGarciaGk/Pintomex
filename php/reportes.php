@@ -81,7 +81,14 @@ class Reportes {
             $stmt->close();
             if (!$corte) return ['success'=>false,'message'=>'Corte no encontrado'];
 
-            $stmt = $conn->prepare("SELECT metodo_pago, estado, COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS total FROM ventas WHERE corte_caja_id=? GROUP BY metodo_pago, estado ORDER BY metodo_pago");
+            $stmt = $conn->prepare("SELECT COUNT(*) AS tickets_cancelados FROM ventas WHERE corte_caja_id=? AND estado='cancelada'");
+            $stmt->bind_param('i', $corte_id);
+            $stmt->execute();
+            $canceladosRow = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $corte['tickets_cancelados'] = intval($canceladosRow['tickets_cancelados'] ?? 0);
+
+            $stmt = $conn->prepare("SELECT metodo_pago, estado, COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS total FROM ventas WHERE corte_caja_id=? AND estado='activa' GROUP BY metodo_pago, estado ORDER BY metodo_pago");
             $stmt->bind_param('i', $corte_id);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -89,7 +96,7 @@ class Reportes {
             while ($row = $result->fetch_assoc()) $metodos[] = $row;
             $stmt->close();
 
-            $stmt = $conn->prepare("SELECT folio, fecha, metodo_pago, subtotal, total, estado FROM ventas WHERE corte_caja_id=? ORDER BY fecha DESC LIMIT 150");
+            $stmt = $conn->prepare("SELECT folio, fecha, metodo_pago, subtotal, total, estado FROM ventas WHERE corte_caja_id=? AND estado='activa' ORDER BY fecha DESC LIMIT 150");
             $stmt->bind_param('i', $corte_id);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -120,9 +127,7 @@ class Reportes {
 
             $stmt = $conn->prepare("SELECT
                     COALESCE(SUM(CASE WHEN estado='activa' THEN total ELSE 0 END),0) AS ingresos,
-                    COALESCE(SUM(CASE WHEN estado='cancelada' THEN total ELSE 0 END),0) AS cancelaciones,
                     COUNT(CASE WHEN estado='activa' THEN 1 END) AS ventas_activas,
-                    COUNT(CASE WHEN estado='cancelada' THEN 1 END) AS ventas_canceladas,
                     COALESCE(SUM(CASE WHEN estado='activa' AND metodo_pago='Efectivo' THEN total ELSE 0 END),0) AS efectivo,
                     COALESCE(SUM(CASE WHEN estado='activa' AND metodo_pago='Tarjeta' THEN total ELSE 0 END),0) AS tarjeta,
                     COALESCE(SUM(CASE WHEN estado='activa' AND metodo_pago='Transferencia' THEN total ELSE 0 END),0) AS transferencia
@@ -166,8 +171,7 @@ class Reportes {
             foreach ($estancados as $p) $valor_estancado += floatval($p['valor_detenido']);
 
             $ingresos = floatval($resumen['ingresos'] ?? 0);
-            $cancelaciones = floatval($resumen['cancelaciones'] ?? 0);
-            $utilidad = $ingresos - $egresos - $cancelaciones;
+            $utilidad = $ingresos - $egresos;
 
             return [
                 'success'=>true,
@@ -175,10 +179,8 @@ class Reportes {
                 'resumen'=>[
                     'ingresos'=>$ingresos,
                     'egresos'=>$egresos,
-                    'cancelaciones'=>$cancelaciones,
                     'utilidad'=>$utilidad,
                     'ventas_activas'=>intval($resumen['ventas_activas'] ?? 0),
-                    'ventas_canceladas'=>intval($resumen['ventas_canceladas'] ?? 0),
                     'efectivo'=>floatval($resumen['efectivo'] ?? 0),
                     'tarjeta'=>floatval($resumen['tarjeta'] ?? 0),
                     'transferencia'=>floatval($resumen['transferencia'] ?? 0),

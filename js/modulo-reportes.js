@@ -75,7 +75,7 @@ class ModuloReportes {
                 <div class="reportes-header">
                     <div>
                         <h2><i class="fas fa-chart-bar"></i> Módulo de Reportes</h2>
-                        <p>Consulta cortes, ventas, egresos, cancelaciones y rendimiento financiero del negocio.</p>
+                        <p>Consulta cortes, ventas, egresos y rendimiento financiero del negocio.</p>
                     </div>
                     <button id="btnActualizarReportes" class="btn-reportes-refresh"><i class="fas fa-sync-alt"></i> Actualizar</button>
                 </div>
@@ -172,20 +172,18 @@ class ModuloReportes {
         const totalVendido = cortes.reduce((s, c) => s + this.num(c.total_vendido), 0);
         const efectivo = cortes.reduce((s, c) => s + this.num(c.total_efectivo), 0);
         const ventas = cortes.reduce((s, c) => s + parseInt(c.ventas_realizadas || 0), 0);
-        const cancelados = cortes.reduce((s, c) => s + parseInt(c.tickets_cancelados || 0), 0);
         const dif = cortes.reduce((s, c) => s + this.num(c.diferencia), 0);
         wrap.innerHTML = `
             <div class="reportes-kpi-grid">
                 ${this.kpi('Total vendido', this.money(totalVendido), 'fa-dollar-sign', 'success')}
                 ${this.kpi('Efectivo recibido', this.money(efectivo), 'fa-money-bill-wave', 'primary')}
                 ${this.kpi('Ventas realizadas', ventas, 'fa-receipt', 'info')}
-                ${this.kpi('Tickets cancelados', cancelados, 'fa-ban', 'danger')}
                 ${this.kpi('Diferencia de caja', this.money(dif), 'fa-balance-scale', dif < 0 ? 'danger' : 'warning')}
             </div>
             ${cortes.length === 0 ? this.renderEmpty('No se encontraron cortes con los filtros seleccionados.') : `
             <div class="reportes-table-wrap">
                 <table class="reportes-table">
-                    <thead><tr><th>Corte</th><th>Periodo</th><th>Total vendido</th><th>Métodos de pago</th><th>Ventas</th><th>Cancelados</th><th>Diferencia</th><th>Acción</th></tr></thead>
+                    <thead><tr><th>Corte</th><th>Periodo</th><th>Total vendido</th><th>Métodos de pago</th><th>Ventas</th><th>Cancelaciones</th><th>Diferencia</th><th>Acción</th></tr></thead>
                     <tbody>${cortes.map(c => this.renderFilaCorte(c)).join('')}</tbody>
                 </table>
             </div>`}`;
@@ -231,17 +229,17 @@ class ModuloReportes {
         const ventas = data.ventas || [];
         const movimientos = data.movimientos || [];
         const activas = ventas.filter(v => v.estado === 'activa').reduce((s, v) => s + this.num(v.total), 0);
-        const canceladas = ventas.filter(v => v.estado === 'cancelada').reduce((s, v) => s + this.num(v.total), 0);
+        const ventasActivas = ventas.filter(v => v.estado === 'activa');
         return `
             <div class="detalle-grid">
                 ${this.kpi('Monto inicial', this.money(c.monto_inicial), 'fa-coins', 'primary')}
                 ${this.kpi('Ventas activas', this.money(activas), 'fa-check-circle', 'success')}
-                ${this.kpi('Cancelaciones', this.money(canceladas), 'fa-ban', 'danger')}
+                ${this.kpi('Cancelaciones', parseInt(c.tickets_cancelados || 0), 'fa-ban', 'danger')}
                 ${this.kpi('Diferencia', this.money(c.diferencia), 'fa-balance-scale', this.num(c.diferencia) < 0 ? 'danger' : 'warning')}
             </div>
             <h4 class="subtitulo-reporte">Ventas del corte</h4>
-            <div class="reportes-table-wrap compact"><table class="reportes-table"><thead><tr><th>Folio</th><th>Fecha</th><th>Método</th><th>Total</th><th>Estado</th></tr></thead><tbody>
-            ${ventas.map(v => `<tr><td>${this.escapeHTML(v.folio)}</td><td>${this.fecha(v.fecha)}</td><td>${this.escapeHTML(v.metodo_pago)}</td><td>${this.money(v.total)}</td><td><span class="badge ${v.estado === 'activa' ? 'success' : 'danger'}">${this.escapeHTML(v.estado)}</span></td></tr>`).join('') || `<tr><td colspan="5">Sin ventas registradas.</td></tr>`}
+            <div class="reportes-table-wrap compact"><table class="reportes-table"><thead><tr><th>Folio</th><th>Fecha</th><th>Método</th><th>Total</th></tr></thead><tbody>
+            ${ventasActivas.map(v => `<tr><td>${this.escapeHTML(v.folio)}</td><td>${this.fecha(v.fecha)}</td><td>${this.escapeHTML(v.metodo_pago)}</td><td>${this.money(v.total)}</td></tr>`).join('') || `<tr><td colspan="4">Sin ventas registradas.</td></tr>`}
             </tbody></table></div>
             <h4 class="subtitulo-reporte">Movimientos de caja</h4>
             <div class="reportes-table-wrap compact"><table class="reportes-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th>Referencia</th></tr></thead><tbody>
@@ -254,7 +252,7 @@ class ModuloReportes {
         if (!cont) return;
         cont.innerHTML = `
             <div class="reportes-panel">
-                <div class="reportes-section-title"><div><h3><i class="fas fa-chart-line"></i> Ganancias y Pérdidas</h3><p>Analiza ingresos, egresos, cancelaciones y productos que afectan el rendimiento financiero.</p></div></div>
+                <div class="reportes-section-title"><div><h3><i class="fas fa-chart-line"></i> Ganancias y Pérdidas</h3><p>Analiza ingresos, egresos y productos que afectan el rendimiento financiero.</p></div></div>
                 <div class="reportes-periodos">
                     <span>Periodo:</span>
                     <button class="btn-periodo-reporte ${this.periodoFinanciero === 'dia' ? 'active' : ''}" data-periodo="dia">Día</button>
@@ -298,7 +296,6 @@ class ModuloReportes {
             <div class="reportes-kpi-grid financiero">
                 ${this.kpi('Ingresos', this.money(r.ingresos), 'fa-arrow-trend-up', 'success')}
                 ${this.kpi('Egresos', this.money(r.egresos), 'fa-arrow-trend-down', 'warning')}
-                ${this.kpi('Cancelaciones', this.money(r.cancelaciones), 'fa-ban', 'danger')}
                 ${this.kpi('Resultado estimado', this.money(r.utilidad), 'fa-scale-balanced', r.utilidad >= 0 ? 'success' : 'danger')}
                 ${this.kpi('Valor estancado', this.money(r.valor_estancado), 'fa-box-open', 'danger')}
             </div>
@@ -308,8 +305,6 @@ class ModuloReportes {
                 <div class="bar"><div style="width:100%" class="bar-fill success"></div></div>
                 <div class="comparativa-row"><span>Egresos registrados</span><strong>${this.money(r.egresos)}</strong></div>
                 <div class="bar"><div style="width:${this.porcentaje(r.egresos, r.ingresos)}%" class="bar-fill warning"></div></div>
-                <div class="comparativa-row"><span>Pérdidas por cancelaciones</span><strong>${this.money(r.cancelaciones)}</strong></div>
-                <div class="bar"><div style="width:${this.porcentaje(r.cancelaciones, r.ingresos)}%" class="bar-fill danger"></div></div>
             </div>
             <div class="reportes-finanzas-grid">
                 ${this.renderListaProductos('Productos con mayor ganancia', 'Alta contribución al ingreso.', data.productos_mayor_ganancia, 'success', 'fa-trophy')}
