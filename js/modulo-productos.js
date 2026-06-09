@@ -12,10 +12,11 @@ class ModuloProductos {
         this.buscarTimeout = null;
         this.tabActiva = 'productos';
         this.filtroStock = null;
+        this.productosOcultos = true;
     }
 
     async init() {
-        await this.cargarProductos();
+        await this.cargarEstadisticas();
         this.cargarEventos();
     }
 
@@ -40,9 +41,23 @@ class ModuloProductos {
         if (toggleCarrito) toggleCarrito.style.display = '';
     }
 
-    async cargarProductos(forceRefresh = false) {
+    async cargarProductos(forceRefresh = false, mostrarTodos = false) {
         if (this.cargando) return;
+
+        if (!mostrarTodos && this.productosOcultos) {
+            this.productos = [];
+            await this.cargarEstadisticas();
+            const moduloVisible = document.getElementById('moduloProductos')?.style.display === 'block';
+            if (moduloVisible) {
+                this.renderizarEstadisticas();
+                this.renderizarTabla([]);
+                this.actualizarBotonOcultarProductos();
+            }
+            return;
+        }
+
         this.cargando = true;
+        this.productosOcultos = false;
         try {
             const url = `${this.apiUrl}?accion=getProductosAdmin&_t=${Date.now()}`;
             const response = await fetch(url);
@@ -54,6 +69,7 @@ class ModuloProductos {
                 if (moduloVisible) {
                     this.renderizarTabla();
                     this.renderizarEstadisticas();
+                    this.actualizarBotonOcultarProductos();
                 }
             } else {
                 this.mostrarNotificacion(data.message || 'Error al cargar productos', 'error');
@@ -83,11 +99,24 @@ class ModuloProductos {
     async buscarProductos() {
         const terminoInput    = document.getElementById('buscarProductoInput');
         const categoriaSelect = document.getElementById('categoriaFiltro');
-        const termino   = terminoInput    ? terminoInput.value   : '';
+        const termino   = terminoInput    ? terminoInput.value.trim()   : '';
         const categoria = categoriaSelect ? categoriaSelect.value : 'Todas';
         this.terminoBusqueda = termino;
         this.categoriaFiltro = categoria;
         this.filtroStock = null;
+
+        if (!termino && (!categoria || categoria === 'Todas')) {
+            this.productosOcultos = true;
+            this.productos = [];
+            this.renderizarEstadisticas();
+            this.renderizarTabla([]);
+            this.actualizarBotonOcultarProductos();
+            return;
+        }
+
+        this.cargando = true;
+        this.productosOcultos = false;
+        this.renderizarTablaCargando('Buscando productos...');
         try {
             let url = `${this.apiUrl}?accion=buscarProductosAdmin&_t=${Date.now()}`;
             if (termino)                            url += `&termino=${encodeURIComponent(termino)}`;
@@ -95,13 +124,65 @@ class ModuloProductos {
             const response = await fetch(url);
             const data = await response.json();
             if (data.success) {
-                this.productos = data.productos;
+                this.productos = data.productos || [];
                 this.renderizarEstadisticas();
                 this.renderizarTabla();
+                this.actualizarBotonOcultarProductos();
+            } else {
+                this.mostrarNotificacion(data.message || 'Error al buscar productos', 'error');
             }
         } catch (error) {
             console.error('Error buscando productos:', error);
             this.mostrarNotificacion('Error al buscar', 'error');
+        } finally {
+            this.cargando = false;
+        }
+    }
+
+
+    renderizarTablaCargando(mensaje = 'Cargando productos...') {
+        const container = document.getElementById('productosTableBody');
+        if (!container) return;
+        container.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align:center;padding:2rem;color:var(--gray);">
+                    <i class="fas fa-spinner fa-spin" style="font-size:1.6rem;margin-bottom:.6rem;color:var(--secondary);"></i>
+                    <div>${mensaje}</div>
+                </td>
+            </tr>`;
+    }
+
+    ocultarProductos() {
+        this.productosOcultos = true;
+        this.productos = [];
+        this.filtroStock = null;
+        this.renderizarTabla([]);
+        this.renderizarEstadisticas();
+        this.actualizarBotonOcultarProductos();
+    }
+
+    async mostrarTodosLosProductos() {
+        const buscarInput = document.getElementById('buscarProductoInput');
+        const categoriaSelect = document.getElementById('categoriaFiltro');
+        if (buscarInput) buscarInput.value = '';
+        if (categoriaSelect) categoriaSelect.value = 'Todas';
+        this.terminoBusqueda = '';
+        this.categoriaFiltro = 'Todas';
+        this.filtroStock = null;
+        this.productosOcultos = false;
+        this.renderizarTablaCargando('Cargando todos los productos...');
+        await this.cargarProductos(true, true);
+    }
+
+    actualizarBotonOcultarProductos() {
+        const btn = document.getElementById('btnToggleProductosVisibles');
+        if (!btn) return;
+        if (this.productosOcultos) {
+            btn.innerHTML = '<i class="fas fa-eye"></i> Mostrar todos';
+            btn.title = 'Mostrar todos los productos';
+        } else {
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar productos';
+            btn.title = 'Ocultar la tabla para mejorar el rendimiento';
         }
     }
 
@@ -170,6 +251,25 @@ class ModuloProductos {
     renderizarTabla(lista = null) {
         const container = document.getElementById('productosTableBody');
         if (!container) return;
+
+        if (this.productosOcultos) {
+            const tableContainer = container.closest('.productos-tabla-container');
+            const bannerExistente = tableContainer?.querySelector('.filtro-stock-banner');
+            if (bannerExistente) bannerExistente.remove();
+            container.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align:center;padding:3rem;color:var(--gray);">
+                        <i class="fas fa-eye-slash" style="font-size:3rem;opacity:.45;margin-bottom:1rem;color:var(--secondary);"></i>
+                        <h3 style="color:var(--primary);margin-bottom:.5rem;">Productos ocultos para mejorar el rendimiento</h3>
+                        <p style="margin-bottom:1rem;">Busca por nombre, código de barras o selecciona una categoría para mostrar solo los productos necesarios.</p>
+                        <button id="btnMostrarTodosDesdeTabla" class="btn-agregar-producto" style="background:var(--secondary);color:white;border:none;padding:.7rem 1.2rem;border-radius:var(--radius-md);cursor:pointer;font-weight:600;">
+                            <i class="fas fa-list"></i> Mostrar todos los productos
+                        </button>
+                    </td>
+                </tr>`;
+            container.querySelector('#btnMostrarTodosDesdeTabla')?.addEventListener('click', () => this.mostrarTodosLosProductos());
+            return;
+        }
 
         const productos = lista !== null ? lista : this.productos;
 
@@ -845,6 +945,17 @@ class ModuloProductos {
             nb.addEventListener('click', () => this.mostrarModalImportacion());
         }
 
+        const btnToggleProductos = document.getElementById('btnToggleProductosVisibles');
+        if (btnToggleProductos && btnToggleProductos.parentNode) {
+            const nb = btnToggleProductos.cloneNode(true);
+            btnToggleProductos.parentNode.replaceChild(nb, btnToggleProductos);
+            nb.addEventListener('click', () => {
+                if (this.productosOcultos) this.mostrarTodosLosProductos();
+                else this.ocultarProductos();
+            });
+            this.actualizarBotonOcultarProductos();
+        }
+
         const buscarInput = document.getElementById('buscarProductoInput');
         if (buscarInput && buscarInput.parentNode) {
             const ni = buscarInput.cloneNode(true);
@@ -880,7 +991,7 @@ class ModuloProductos {
                 this.terminoBusqueda = '';
                 this.categoriaFiltro = 'Todas';
                 this.filtroStock = null;
-                this.cargarProductos();
+                this.ocultarProductos();
             });
         }
 
@@ -936,7 +1047,7 @@ class ModuloProductos {
         }
         moduloProductos.style.display = 'block';
         this.tabActiva = 'productos';
-        setTimeout(() => { this.cargarProductos(); this.cargarEventos(); }, 50);
+        setTimeout(async () => { await this.cargarEstadisticas(); this.renderizarTabla([]); this.renderizarEstadisticas(); this.cargarEventos(); }, 50);
     }
 
     ocultarModulo() {
@@ -983,6 +1094,9 @@ class ModuloProductos {
                         <button id="btnLimpiarBusqueda" class="btn-limpiar" title="Limpiar búsqueda">
                             <i class="fas fa-times"></i>
                         </button>
+                        <button id="btnToggleProductosVisibles" class="btn-limpiar" title="Mostrar todos los productos" style="width:auto;padding:0 1rem;gap:.5rem;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-eye"></i> Mostrar todos
+                        </button>
                     </div>
                     <div class="productos-tabla-container">
                         <table class="productos-tabla">
@@ -997,7 +1111,7 @@ class ModuloProductos {
                                 </tr>
                             </thead>
                             <tbody id="productosTableBody">
-                                <tr><td colspan="6" style="text-align:center;padding:2rem;">Cargando productos...<\/td></tr>
+                                <tr><td colspan="6" style="text-align:center;padding:2rem;">Productos ocultos. Use la búsqueda, categoría o el botón “Mostrar todos”.<\/td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1014,6 +1128,7 @@ class ModuloProductos {
         if (document.getElementById('moduloProductos')?.style.display === 'block') {
             this.renderizarTabla();
             this.renderizarEstadisticas();
+            this.actualizarBotonOcultarProductos();
         }
     }
 

@@ -19,6 +19,8 @@ header('Cache-Control: public, max-age=3600');
     <link rel="apple-touch-icon" href="img/pintumex-icon.png">
     <meta name="csrf-token" content="<?php echo generarCsrfToken(); ?>">
     <meta name="theme-color" content="#2E2168">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
 
     <script>
         if (!('IntersectionObserver' in window)) {

@@ -354,8 +354,9 @@ try {
             $subtipo      = $_GET['subtipo']      ?? null;
             $fecha_inicio = isset($_GET['fecha_inicio']) ? sanitize($_GET['fecha_inicio']) : null;
             $fecha_fin    = isset($_GET['fecha_fin'])    ? sanitize($_GET['fecha_fin'])    : null;
+            $busqueda     = isset($_GET['busqueda'])     ? trim(sanitize($_GET['busqueda'])) : '';
             $limite       = filter_var($_GET['limite'] ?? 100, FILTER_VALIDATE_INT) ?: 100;
-            $response     = $inventario->getMovimientos($producto_id, $tipo, $subtipo, $fecha_inicio, $fecha_fin, $limite);
+            $response     = $inventario->getMovimientos($producto_id, $tipo, $subtipo, $fecha_inicio, $fecha_fin, $limite, $busqueda);
             break;
 
         case 'getProductosMasVendidos':

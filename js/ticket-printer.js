@@ -44,10 +44,10 @@ class TicketPrinter {
         const fechaFormateada = this.formatearFecha(venta.fecha);
 
         const itemsHTML = venta.items.map(item => {
-            const precio   = parseFloat(item.precio)   || 0;
+            const precio = parseFloat(item.precio) || 0;
             const subtotal = parseFloat(item.subtotal) || 0;
-            const cantidad = parseInt(item.cantidad)   || 0;
-            const nombre   = item.nombre               || '';
+            const cantidad = parseInt(item.cantidad) || 0;
+            const nombre = item.nombre || '';
             return `
                 <div class="ticket-line">
                     <span class="item-name">${this.truncate(nombre, 28)}</span>
@@ -61,7 +61,7 @@ class TicketPrinter {
         let pagoHTML = '';
         if (venta.metodo_pago === 'Efectivo' && venta.efectivo_recibido) {
             const efectivoRecibido = parseFloat(venta.efectivo_recibido) || 0;
-            const cambio           = parseFloat(venta.cambio)            || 0;
+            const cambio = parseFloat(venta.cambio) || 0;
             pagoHTML = `
                 <div class="ticket-line">
                     <span>Efectivo recibido:</span>
@@ -75,7 +75,7 @@ class TicketPrinter {
         }
 
         const subtotal = parseFloat(venta.subtotal) || 0;
-        const total    = parseFloat(venta.total)    || 0;
+        const total = parseFloat(venta.total) || 0;
 
         return `
             <!DOCTYPE html>
@@ -85,7 +85,7 @@ class TicketPrinter {
                 <title>Ticket ${venta.folio}</title>
                 <style>
                     @page {
-                        size: 80mm 297mm;
+                        size: 58mm 297mm;
                         margin: 0;
                     }
                     * {
@@ -95,8 +95,9 @@ class TicketPrinter {
                     }
                     body {
                         font-family: 'Courier New', 'Lucida Sans Typewriter', monospace;
-                        font-size: 12px;
-                        width: 80mm;
+                        font-size: 11px;
+                        font-weight: bold;
+                        width: 58mm;
                         margin: 0 auto;
                         padding: 2mm;
                         background: white;
@@ -109,20 +110,23 @@ class TicketPrinter {
                         margin-bottom: 5px;
                     }
                     .header h1 {
-                        font-size: 16px;
+                        font-size: 14px;
+                        font-weight: bold;
                         margin-bottom: 3px;
                     }
                     .header p {
-                        font-size: 10px;
+                        font-size: 9px;
+                        font-weight: bold;
                         margin: 2px 0;
                     }
                     .header .rfc {
-                        font-size: 11px;
+                        font-size: 10px;
                         font-weight: bold;
                         margin: 4px 0 2px;
                     }
                     .header .direccion {
-                        font-size: 10px;
+                        font-size: 9px;
+                        font-weight: bold;
                         line-height: 1.4;
                         margin-bottom: 4px;
                     }
@@ -135,6 +139,7 @@ class TicketPrinter {
                         display: flex;
                         justify-content: space-between;
                         margin: 3px 0;
+                        font-weight: bold;
                     }
                     .items {
                         margin: 8px 0;
@@ -144,25 +149,30 @@ class TicketPrinter {
                         display: flex;
                         justify-content: space-between;
                         margin: 3px 0;
-                        font-size: 11px;
+                        font-size: 10px;
+                        font-weight: bold;
                     }
                     .item-name {
                         flex: 2;
                         white-space: nowrap;
                         overflow: hidden;
                         text-overflow: ellipsis;
+                        font-weight: bold;
                     }
                     .item-qty {
-                        width: 35px;
+                        width: 30px;
                         text-align: center;
+                        font-weight: bold;
                     }
                     .item-price {
-                        width: 55px;
+                        width: 45px;
                         text-align: right;
+                        font-weight: bold;
                     }
                     .item-subtotal {
-                        width: 60px;
+                        width: 50px;
                         text-align: right;
+                        font-weight: bold;
                     }
                     .totales {
                         border-top: 1px dashed #000;
@@ -174,48 +184,46 @@ class TicketPrinter {
                         justify-content: space-between;
                         margin: 3px 0;
                         font-weight: bold;
+                        font-size: 12px;
                     }
-                    .garantia {
+                    .aviso {
                         margin-top: 10px;
-                        padding: 6px 4px;
+                        padding: 8px 4px;
                         border: 1px solid #000;
                         border-radius: 2px;
-                    }
-                    .garantia-title {
                         text-align: center;
-                        font-weight: bold;
-                        font-size: 11px;
-                        letter-spacing: 1px;
-                        margin-bottom: 5px;
-                        text-decoration: underline;
                     }
-                    .garantia-item {
+                    .aviso-texto {
                         font-size: 10px;
-                        margin: 3px 0;
-                        padding-left: 2px;
-                        line-height: 1.4;
-                    }
-                    .garantia-item::before {
-                        content: "• ";
                         font-weight: bold;
+                        letter-spacing: 1px;
                     }
                     .footer {
                         text-align: center;
                         margin-top: 10px;
                         padding-top: 5px;
                         border-top: 1px dashed #000;
-                        font-size: 10px;
+                        font-size: 9px;
+                        font-weight: bold;
                     }
                     hr {
                         border: none;
                         border-top: 1px dashed #000;
                         margin: 5px 0;
                     }
+                    span {
+                        font-weight: bold;
+                    }
+                    div {
+                        font-weight: bold;
+                    }
+                    strong {
+                        font-weight: bold;
+                    }
                 </style>
             </head>
             <body>
                 <div class="ticket">
-
                     <div class="header">
                         <h1>🏪 PINTUMEX</h1>
                         <p class="rfc">RFC: RAZD961230NS9</p>
@@ -264,20 +272,8 @@ class TicketPrinter {
                         </div>
                     </div>
 
-                    <div class="garantia">
-                        <div class="garantia-title">★ POLÍTICA DE CAMBIOS ★</div>
-                        <div class="garantia-item">
-                            Cambios válidos dentro de las <strong>48 horas</strong>
-                            siguientes a la compra.
-                        </div>
-                        <div class="garantia-item">
-                            El producto debe estar <strong>sellado, sin uso y en
-                            perfectas condiciones</strong>.
-                        </div>
-                        <div class="garantia-item">
-                            Es <strong>indispensable presentar este ticket</strong>
-                            al momento de solicitar el cambio.
-                        </div>
+                    <div class="aviso">
+                        <div class="aviso-texto">⚠️ NO HAY CAMBIOS NI DEVOLUCIONES ⚠️</div>
                     </div>
 
                     <div class="footer">
@@ -285,9 +281,8 @@ class TicketPrinter {
                         <p>¡Gracias por su compra!</p>
                         <p>Vuelva pronto</p>
                         <hr>
-                        <p style="font-size: 9px;">https://pintumex.com.mx</p>
+                        <p style="font-size: 8px;">https://pintumex.com.mx</p>
                     </div>
-
                 </div>
             </body>
             </html>
@@ -323,10 +318,10 @@ class TicketPrinter {
 
     printFallback(ticketHtml) {
         const iframe = document.createElement('iframe');
-        iframe.style.position   = 'absolute';
-        iframe.style.width      = '0';
-        iframe.style.height     = '0';
-        iframe.style.border     = 'none';
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
         iframe.style.visibility = 'hidden';
         document.body.appendChild(iframe);
         const iframeDoc = iframe.contentWindow.document;

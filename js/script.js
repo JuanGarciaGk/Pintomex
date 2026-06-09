@@ -402,8 +402,8 @@ class POSSystem {
         const feedback = document.createElement('div');
         feedback.className = `scanner-feedback scanner-${tipo}`;
         feedback.innerHTML = tipo === 'success'
-            ? '<i class="fas fa-check-circle" aria-hidden="true"></i> Producto agregado'
-            : '<i class="fas fa-times-circle" aria-hidden="true"></i> Producto no encontrado';
+            ? '<i class="fas fa-check-circle"></i> Producto agregado'
+            : '<i class="fas fa-times-circle"></i> Producto no encontrado';
         feedback.setAttribute('role', 'status');
         feedback.setAttribute('aria-live', 'polite');
         document.body.appendChild(feedback);
@@ -452,7 +452,7 @@ class POSSystem {
         modal.innerHTML = `
             <div class="modal-contenido" style="max-width:500px;">
                 <h3 style="color:var(--primary);margin-bottom:1.5rem;">
-                    <i class="fas fa-keyboard" aria-hidden="true"></i> Atajos de Teclado
+                    <i class="fas fa-keyboard"></i> Atajos de Teclado
                 </h3>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                     <div><strong>Enter</strong> en búsqueda</div><div>Agregar producto</div>
@@ -464,12 +464,12 @@ class POSSystem {
                     <div><strong>F1</strong></div><div>Mostrar ayuda</div>
                 </div>
                 <div style="margin-top:2rem;padding:1rem;background:var(--light);border-radius:var(--radius-md);">
-                    <p><i class="fas fa-info-circle" aria-hidden="true"></i>
+                    <p><i class="fas fa-info-circle"></i>
                     El escáner funciona únicamente en el módulo <strong>Punto de Venta</strong>.</p>
                 </div>
                 <button class="btn-cerrar-atajos"
                     style="width:100%;margin-top:1.5rem;padding:1rem;background:var(--primary);color:white;border:none;border-radius:var(--radius-md);cursor:pointer;">
-                    <i class="fas fa-check" aria-hidden="true"></i> Cerrar
+                    <i class="fas fa-check"></i> Cerrar
                 </button>
             </div>`;
         document.body.appendChild(modal);
@@ -822,7 +822,7 @@ class POSSystem {
                             <span>${this.escapeHTML(producto.descripcion || '')}</span>
                         </div>
                         <div class="sugerencia-stock ${producto.stock_actual <= producto.stock_minimo ? 'stock-bajo-sugerencia' : ''}">
-                            <i class="fas fa-box" aria-hidden="true"></i> Stock: ${producto.stock_actual}
+                            <i class="fas fa-box"></i> Stock: ${producto.stock_actual}
                         </div>
                     </div>
                     <div class="sugerencia-precio">$${parseFloat(producto.precio).toFixed(2)}</div>`;
@@ -989,7 +989,7 @@ class POSSystem {
                 <h3>${this.escapeHTML(producto.nombre)}</h3>
                 <div class="precio">$${parseFloat(producto.precio).toFixed(2)}</div>
                 <div class="${stockClass}">
-                    <i class="fas fa-box" aria-hidden="true"></i> ${stockText}
+                    <i class="fas fa-box"></i> ${stockText}
                 </div>
                 <small>${this.escapeHTML(producto.descripcion || '')}</small>`;
             fragment.appendChild(card);
@@ -1035,7 +1035,7 @@ class POSSystem {
         if (!data.items || data.items.length === 0) {
             container.innerHTML = `
                 <div style="text-align:center;padding:2rem;color:var(--gray);">
-                    <i class="fas fa-shopping-cart" style="font-size:3rem;margin-bottom:1rem;opacity:.3;" aria-hidden="true"></i>
+                    <i class="fas fa-shopping-cart" style="font-size:3rem;margin-bottom:1rem;opacity:.3;"></i>
                     <p>Carrito vacío</p>
                     <p style="font-size:.9rem;margin-top:.5rem;">Agregue productos para comenzar</p>
                 </div>`;
@@ -1065,13 +1065,13 @@ class POSSystem {
                     <div class="cantidad-control">
                         <button class="btn-decrement" data-id="${item.id}" data-cantidad="${item.cantidad - 1}"
                             ${item.cantidad <= 1 ? 'disabled' : ''} aria-label="Disminuir cantidad">
-                            <i class="fas fa-minus" aria-hidden="true"></i>
+                            <i class="fas fa-minus"></i>
                         </button>
                         <input type="number" value="${item.cantidad}" min="1" max="${item.stock}"
                             class="cantidad-input" data-id="${item.id}" aria-label="Cantidad de ${this.escapeHTML(item.nombre)}">
                         <button class="btn-increment" data-id="${item.id}" data-cantidad="${item.cantidad + 1}"
                             ${item.cantidad >= item.stock ? 'disabled' : ''} aria-label="Aumentar cantidad">
-                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <i class="fas fa-plus"></i>
                         </button>
                     </div>
                 </div>
@@ -1079,7 +1079,7 @@ class POSSystem {
                     <div class="precio">$${parseFloat(item.precio).toFixed(2)}</div>
                     <small>$${parseFloat(item.subtotal).toFixed(2)}</small>
                     <button class="btn-eliminar" data-id="${item.id}" aria-label="Eliminar ${this.escapeHTML(item.nombre)}">
-                        <i class="fas fa-trash" aria-hidden="true"></i>
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>`;
             fragment.appendChild(itemDiv);
@@ -1335,7 +1335,7 @@ class POSSystem {
 
         const btnVaciar = document.createElement('button');
         btnVaciar.className = 'btn-vaciar-carrito';
-        btnVaciar.innerHTML = '<i class="fas fa-trash-alt" aria-hidden="true"></i> Vaciar';
+        btnVaciar.innerHTML = '<i class="fas fa-trash-alt"></i> Vaciar';
         btnVaciar.setAttribute('aria-label', 'Vaciar carrito completo');
         btnVaciar.style.display = 'none';
 
@@ -1375,7 +1375,7 @@ class POSSystem {
 
         const toggleCarrito = document.createElement('button');
         toggleCarrito.className = 'toggle-carrito-mobile';
-        toggleCarrito.innerHTML = '<i class="fas fa-shopping-cart" aria-hidden="true"></i> <span>Ver Carrito</span>';
+        toggleCarrito.innerHTML = '<i class="fas fa-shopping-cart"></i> <span>Ver Carrito</span>';
         toggleCarrito.setAttribute('aria-label', 'Abrir carrito de compras');
         document.body.appendChild(toggleCarrito);
         toggleCarrito.addEventListener('click', () => {
@@ -1384,7 +1384,7 @@ class POSSystem {
 
         const toggleMenu = document.createElement('button');
         toggleMenu.className = 'toggle-menu-mobile';
-        toggleMenu.innerHTML = '<i class="fas fa-bars" aria-hidden="true"></i> <span>Menú</span>';
+        toggleMenu.innerHTML = '<i class="fas fa-bars"></i> <span>Menú</span>';
         toggleMenu.setAttribute('aria-label', 'Abrir menú');
         document.body.appendChild(toggleMenu);
         toggleMenu.addEventListener('click', () => {

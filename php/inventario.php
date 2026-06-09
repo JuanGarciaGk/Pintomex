@@ -224,7 +224,7 @@ class Inventario {
         }
     }
 
-    public function getMovimientos($producto_id = null, $tipo = null, $subtipo = null, $fecha_inicio = null, $fecha_fin = null, $limite = 100) {
+    public function getMovimientos($producto_id = null, $tipo = null, $subtipo = null, $fecha_inicio = null, $fecha_fin = null, $limite = 100, $busqueda = '') {
         global $conn;
         try {
             $limite = max(1, min(500, (int)$limite));
@@ -258,8 +258,18 @@ class Inventario {
                 $params[] = $fecha_fin;
                 $types   .= 's';
             }
+            $busqueda = trim((string)$busqueda);
+            if ($busqueda !== '') {
+                $where[]  = '(p.nombre LIKE ? OR p.codigo_barras LIKE ? OR mi.justificacion LIKE ? OR mi.notas LIKE ?)';
+                $like = '%' . $busqueda . '%';
+                $params[] = $like;
+                $params[] = $like;
+                $params[] = $like;
+                $params[] = $like;
+                $types   .= 'ssss';
+            }
 
-            $sql = "SELECT mi.*, p.nombre AS producto_nombre, p.categoria AS producto_categoria
+            $sql = "SELECT mi.*, p.nombre AS producto_nombre, p.categoria AS producto_categoria, p.codigo_barras AS producto_codigo
                     FROM movimientos_inventario mi
                     JOIN productos p ON p.id = mi.producto_id
                     WHERE " . implode(' AND ', $where) . "

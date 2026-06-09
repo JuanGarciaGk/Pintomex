@@ -3,11 +3,34 @@ class ModuloInventario {
         this.apiUrl = 'php/api.php';
         this.tabActiva = 'resumen';
         this.modalActual = null;
-        this.historialFiltros = { tipo: '', fecha_inicio: '', fecha_fin: '', busqueda: '' };
+        const ayer = this.fechaLocal(this.restarDias(new Date(), 1));
+        this.historialFiltros = { tipo: '', fecha_inicio: ayer, fecha_fin: ayer, busqueda: '' };
         this.periodoTendencia = 'semana';
         this.productos = [];
         this.cargando = false;
         this.cacheTendencias = new Map();
+    }
+
+    fechaLocal(fecha = new Date()) {
+        const year = fecha.getFullYear();
+        const month = String(fecha.getMonth() + 1).padStart(2, '0');
+        const day = String(fecha.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    restarDias(fecha, dias) {
+        const copia = new Date(fecha);
+        copia.setDate(copia.getDate() - dias);
+        return copia;
+    }
+
+    obtenerFiltrosHistorialDesdeFormulario() {
+        return {
+            busqueda: (document.getElementById('histBusqueda')?.value || '').trim(),
+            tipo: document.getElementById('histTipo')?.value || '',
+            fecha_inicio: document.getElementById('histFechaInicio')?.value || '',
+            fecha_fin: document.getElementById('histFechaFin')?.value || ''
+        };
     }
 
     async init() {
@@ -278,17 +301,33 @@ class ModuloInventario {
             </div>
             <div id="historialTabla"><div style="text-align:center;padding:3rem;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:1rem;font-size:1rem;">Cargando historial...</p></div></div>`;
 
-        document.getElementById('btnFiltrarHist')?.addEventListener('click', () => {
-            this.historialFiltros = {
-                busqueda: document.getElementById('histBusqueda')?.value || '',
-                tipo: document.getElementById('histTipo')?.value || '',
-                fecha_inicio: document.getElementById('histFechaInicio')?.value || '',
-                fecha_fin: document.getElementById('histFechaFin')?.value || ''
-            };
+        const aplicarFiltrosHistorial = () => {
+            this.historialFiltros = this.obtenerFiltrosHistorialDesdeFormulario();
             this.cargarHistorialTabla();
-        });
+        };
+
+        document.getElementById('btnFiltrarHist')?.addEventListener('click', aplicarFiltrosHistorial);
+
+        const histBusqueda = document.getElementById('histBusqueda');
+        if (histBusqueda) {
+            histBusqueda.addEventListener('keydown', e => {
+                if (e.key === 'Enter') aplicarFiltrosHistorial();
+            });
+
+            let busquedaTimer = null;
+            histBusqueda.addEventListener('input', () => {
+                clearTimeout(busquedaTimer);
+                busquedaTimer = setTimeout(aplicarFiltrosHistorial, 450);
+            });
+        }
+
+        document.getElementById('histTipo')?.addEventListener('change', aplicarFiltrosHistorial);
+        document.getElementById('histFechaInicio')?.addEventListener('change', aplicarFiltrosHistorial);
+        document.getElementById('histFechaFin')?.addEventListener('change', aplicarFiltrosHistorial);
+
         document.getElementById('btnLimpiarHist')?.addEventListener('click', () => {
-            this.historialFiltros = { tipo: '', fecha_inicio: '', fecha_fin: '', busqueda: '' };
+            const ayer = this.fechaLocal(this.restarDias(new Date(), 1));
+            this.historialFiltros = { tipo: '', fecha_inicio: ayer, fecha_fin: ayer, busqueda: '' };
             this.cargarHistorial();
         });
         await this.cargarHistorialTabla();
@@ -618,6 +657,137 @@ class ModuloInventario {
             </section>`;
     }
 
+
+    renderBuscadorProductoInventario(prefix, preseleccionId = null, placeholder = 'Buscar producto por nombre o código de barras...') {
+        const seleccionado = preseleccionId ? this.productos.find(p => String(p.id) === String(preseleccionId)) : null;
+        const valorInicial = seleccionado
+            ? `${seleccionado.nombre} · ${seleccionado.codigo_barras || 'Sin código'} · Stock: ${seleccionado.stock_actual}`
+            : '';
+
+        return `
+            <div class="inv-product-search" style="position:relative;">
+                <input type="hidden" id="${prefix}ProdId" value="${seleccionado ? seleccionado.id : ''}">
+                <input type="text" id="${prefix}ProdSearch" value="${this.escapeHTML(valorInicial)}"
+                    placeholder="${this.escapeHTML(placeholder)}" autocomplete="off" required
+                    style="width:100%;padding:0.9rem 1rem;border:2px solid var(--light);border-radius:var(--radius-md);font-size:1rem;outline:none;">
+                <div id="${prefix}ProdSuggestions" class="inv-product-suggestions"
+                    style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:white;border:1px solid var(--light);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:3500;max-height:260px;overflow-y:auto;"></div>
+                <small id="${prefix}ProdHelp" style="display:block;margin-top:0.45rem;color:var(--gray);font-size:0.8rem;">
+                    Escriba al menos 2 caracteres y seleccione un producto de la lista.
+                </small>
+            </div>`;
+    }
+
+    configurarBuscadorProductoInventario(prefix) {
+        const input = document.getElementById(`${prefix}ProdSearch`);
+        const hidden = document.getElementById(`${prefix}ProdId`);
+        const sugerencias = document.getElementById(`${prefix}ProdSuggestions`);
+        if (!input || !hidden || !sugerencias) return;
+
+        const normalizar = texto => String(texto || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        const cerrar = () => {
+            sugerencias.style.display = 'none';
+            sugerencias.innerHTML = '';
+        };
+
+        const seleccionar = producto => {
+            hidden.value = producto.id;
+            input.value = `${producto.nombre} · ${producto.codigo_barras || 'Sin código'} · Stock: ${producto.stock_actual}`;
+            input.dataset.selectedText = input.value;
+            cerrar();
+        };
+
+        const renderResultados = termino => {
+            const q = normalizar(termino);
+            if (q.length < 2) {
+                hidden.value = '';
+                sugerencias.innerHTML = `
+                    <div style="padding:0.9rem 1rem;color:var(--gray);font-size:0.9rem;text-align:center;">
+                        Escriba mínimo 2 caracteres para buscar.
+                    </div>`;
+                sugerencias.style.display = 'block';
+                return;
+            }
+
+            const resultados = this.productos
+                .filter(p => {
+                    const nombre = normalizar(p.nombre);
+                    const codigo = normalizar(p.codigo_barras);
+                    const categoria = normalizar(p.categoria);
+                    return nombre.includes(q) || codigo.includes(q) || categoria.includes(q);
+                })
+                .slice(0, 25);
+
+            if (resultados.length === 0) {
+                hidden.value = '';
+                sugerencias.innerHTML = `
+                    <div style="padding:1rem;color:var(--danger);font-size:0.9rem;text-align:center;">
+                        No se encontraron productos con "${this.escapeHTML(termino)}".
+                    </div>`;
+                sugerencias.style.display = 'block';
+                return;
+            }
+
+            sugerencias.innerHTML = resultados.map(p => {
+                const stock = parseInt(p.stock_actual || 0);
+                const stockColor = stock <= 0 ? 'var(--danger)' : (stock <= parseInt(p.stock_minimo || 0) ? 'var(--warning)' : 'var(--success)');
+                return `
+                    <button type="button" class="inv-product-option" data-id="${p.id}"
+                        style="width:100%;padding:0.85rem 1rem;border:none;border-bottom:1px solid var(--light);background:white;text-align:left;cursor:pointer;display:block;">
+                        <strong style="display:block;color:var(--primary);font-size:0.95rem;">${this.escapeHTML(p.nombre)}</strong>
+                        <span style="display:block;color:var(--gray);font-size:0.8rem;margin-top:0.2rem;">
+                            <i class="fas fa-barcode"></i> ${this.escapeHTML(p.codigo_barras || 'Sin código')} · ${this.escapeHTML(p.categoria || 'Sin categoría')}
+                        </span>
+                        <span style="display:block;color:${stockColor};font-weight:700;font-size:0.82rem;margin-top:0.25rem;">
+                            Stock actual: ${stock}
+                        </span>
+                    </button>`;
+            }).join('');
+            sugerencias.style.display = 'block';
+
+            sugerencias.querySelectorAll('.inv-product-option').forEach(btn => {
+                btn.addEventListener('mouseenter', () => btn.style.background = '#f8fafc');
+                btn.addEventListener('mouseleave', () => btn.style.background = 'white');
+                btn.addEventListener('click', () => {
+                    const producto = this.productos.find(p => String(p.id) === String(btn.dataset.id));
+                    if (producto) seleccionar(producto);
+                });
+            });
+        };
+
+        input.addEventListener('input', () => {
+            hidden.value = '';
+            renderResultados(input.value.trim());
+        });
+
+        input.addEventListener('focus', () => {
+            input.style.borderColor = 'var(--secondary)';
+            input.style.boxShadow = '0 0 0 3px rgba(43,124,48,.18)';
+            if (input.value.trim().length >= 2 && !hidden.value) renderResultados(input.value.trim());
+        });
+
+        input.addEventListener('blur', () => {
+            input.style.borderColor = 'var(--light)';
+            input.style.boxShadow = 'none';
+            setTimeout(cerrar, 180);
+        });
+
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Escape') cerrar();
+            if (e.key === 'Enter') {
+                const primera = sugerencias.querySelector('.inv-product-option');
+                if (primera && sugerencias.style.display !== 'none') {
+                    e.preventDefault();
+                    primera.click();
+                }
+            }
+        });
+    }
+
     mostrarModalEntrada(preseleccionId = null, preseleccionNombre = '') {
         this.cerrarModalActual();
         const modal = document.createElement('div');
@@ -634,10 +804,6 @@ class ModuloInventario {
         modal.style.zIndex = '2000';
         modal.style.backdropFilter = 'blur(4px)';
 
-        const opcionesProd = this.productos.map(p =>
-            `<option value="${p.id}" ${p.id == preseleccionId ? 'selected' : ''}>${this.escapeHTML(p.nombre)} (Stock actual: ${p.stock_actual})</option>`
-        ).join('');
-
         modal.innerHTML = `
             <div style="background:white;border-radius:var(--radius-lg);padding:2rem;max-width:550px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid var(--light);">
@@ -647,7 +813,7 @@ class ModuloInventario {
                 <form id="formEntradaInv">
                     <div style="margin-bottom:1.2rem;">
                         <label style="display:block;font-weight:700;color:var(--primary);margin-bottom:0.5rem;font-size:0.95rem;">Producto *</label>
-                        <select id="entProdId" required style="width:100%;padding:0.9rem 1rem;border:2px solid var(--light);border-radius:var(--radius-md);font-size:1rem;">${opcionesProd}</select>
+                        ${this.renderBuscadorProductoInventario('ent', preseleccionId)}
                     </div>
                     <div style="margin-bottom:1.2rem;">
                         <label style="display:block;font-weight:700;color:var(--primary);margin-bottom:0.5rem;font-size:0.95rem;">Tipo de Entrada *</label>
@@ -679,7 +845,8 @@ class ModuloInventario {
             e.preventDefault();
             await this.procesarEntrada();
         });
-        modal.querySelector('#entProdId')?.focus();
+        this.configurarBuscadorProductoInventario('ent');
+        modal.querySelector('#entProdSearch')?.focus();
     }
 
     async procesarEntrada() {
@@ -772,10 +939,6 @@ class ModuloInventario {
         modal.style.zIndex = '2000';
         modal.style.backdropFilter = 'blur(4px)';
 
-        const opcionesProd = this.productos.map(p =>
-            `<option value="${p.id}" ${p.id == preseleccionId ? 'selected' : ''}>${this.escapeHTML(p.nombre)} (Stock actual: ${p.stock_actual})</option>`
-        ).join('');
-
         modal.innerHTML = `
             <div style="background:white;border-radius:var(--radius-lg);padding:2rem;max-width:550px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid var(--light);">
@@ -788,7 +951,7 @@ class ModuloInventario {
                 <form id="formAjusteInv">
                     <div style="margin-bottom:1.2rem;">
                         <label style="display:block;font-weight:700;color:var(--primary);margin-bottom:0.5rem;font-size:0.95rem;">Producto *</label>
-                        <select id="ajProdId" required style="width:100%;padding:0.9rem 1rem;border:2px solid var(--light);border-radius:var(--radius-md);font-size:1rem;">${opcionesProd}</select>
+                        ${this.renderBuscadorProductoInventario('aj', preseleccionId)}
                     </div>
                     <div style="margin-bottom:1.2rem;">
                         <label style="display:block;font-weight:700;color:var(--primary);margin-bottom:0.5rem;font-size:0.95rem;">Tipo de Ajuste *</label>
@@ -823,7 +986,8 @@ class ModuloInventario {
             e.preventDefault();
             await this.procesarAjuste();
         });
-        modal.querySelector('#ajProdId')?.focus();
+        this.configurarBuscadorProductoInventario('aj');
+        modal.querySelector('#ajProdSearch')?.focus();
     }
 
     async procesarAjuste() {
